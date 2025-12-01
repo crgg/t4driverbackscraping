@@ -2,13 +2,30 @@
 import requests
 from bs4 import BeautifulSoup
 
-from .config import BASE_URL, LOGIN_PATH, USERNAME, PASSWORD
+from .config import get_app_credentials, get_app_urls
 
 
-def create_logged_session() -> requests.Session:
+def create_logged_session(app_key: str = "driverapp_goto") -> requests.Session:
+    """
+    Crea una sesión autenticada para una aplicación específica.
+    
+    Args:
+        app_key: clave de la aplicación en APPS_CONFIG (default: 'driverapp_goto')
+    
+    Returns:
+        requests.Session autenticada
+    
+    Raises:
+        RuntimeError: si el login falla
+    """
     session = requests.Session()
-    login_url = BASE_URL + LOGIN_PATH  # suele ser "https://driverapp.goto-logistics.com/login"
-
+    
+    # Obtener credenciales y URLs
+    app_name, username, password = get_app_credentials(app_key)
+    base_url, login_url, logs_url = get_app_urls(app_key)
+    
+    print(f"🔐 Autenticando en {app_name} ({base_url})...")
+    
     # 1) GET al login para obtener el token CSRF
     resp = session.get(login_url)
     resp.raise_for_status()
@@ -25,8 +42,8 @@ def create_logged_session() -> requests.Session:
 
     # OJO: el campo se llama "identity"
     payload = {
-        "identity": USERNAME,
-        "password": PASSWORD,
+        "identity": username,
+        "password": password,
     }
     if csrf_token:
         payload["_token"] = csrf_token
@@ -42,11 +59,8 @@ def create_logged_session() -> requests.Session:
 
     # 3) Comprobar rápido si seguimos en la página de login
     if 'id="validate"' in resp.text and "Welcome back to DriverApp!" in resp.text:
-        raise RuntimeError("❌ Login falló: revisa USERNAME/PASSWORD o el payload del formulario")
+        raise RuntimeError(f"❌ Login falló en {app_name}: revisa credenciales o el payload del formulario")
 
-    # (Opcional) probar acceder directo a /logs
-    # logs_url = BASE_URL + LOGS_PATH
-    # test = session.get(logs_url)
-    # print("Después del login, GET /logs ->", test.url)
-
+    print(f"✅ Autenticación exitosa en {app_name}")
+    
     return session

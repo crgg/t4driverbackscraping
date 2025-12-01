@@ -1,19 +1,27 @@
 # app/logs_scraper.py
 from bs4 import BeautifulSoup
 
-from .config import BASE_URL, LOGS_PATH, KEYWORDS_NO_CONTROLADO
+from .config import KEYWORDS_NO_CONTROLADO, get_app_urls
 
 
-def fetch_logs_html(session, fecha_str: str) -> str:
+def fetch_logs_html(session, fecha_str: str, app_key: str = "driverapp_goto") -> str:
     """
-    Obtiene el HTML de los logs para una fecha dada.
-    Ajusta los parámetros según cómo filtre la web.
+    Obtiene el HTML de los logs para una fecha dada de una aplicación específica.
+    
+    Args:
+        session: sesión autenticada (requests.Session)
+        fecha_str: fecha en formato "YYYY-MM-DD"
+        app_key: clave de la aplicación en APPS_CONFIG
+    
+    Returns:
+        HTML de la página de logs
     """
-    url = BASE_URL + LOGS_PATH
+    _, _, logs_url = get_app_urls(app_key)
+    
     params = {
-        "date": fecha_str,   # cambia "date" si el parámetro real es otro
+        "date": fecha_str,
     }
-    resp = session.get(url, params=params)
+    resp = session.get(logs_url, params=params)
     resp.raise_for_status()
     return resp.text
 

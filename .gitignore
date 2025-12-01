@@ -214,3 +214,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# html que no es necesario guardar
+debug_logs_accuratecargo.html 
+debug_logs_driverapp_goto.html 
+debug_logs_goexperior.html 
+debug_logs_klc.html 
+debug_logs.html 
+
+# logs innecesarios de guardar 
+*.log 

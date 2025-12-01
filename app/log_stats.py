@@ -1,10 +1,9 @@
 # app/log_stats.py
+import re
 from collections import Counter
 from datetime import datetime, date
 from pathlib import Path
 from typing import Dict, Tuple, List
-
-from .config import BASE_URL, LOGS_PATH
 
 # Mismos nombres que usa writer.save_logs por defecto
 LOG_DIR = Path("salida_logs")
@@ -39,7 +38,6 @@ def _parse_log_line(line: str):
         "mensaje": msg.strip(),
     }
 
-
 def _firma_mensaje(mensaje: str) -> str:
     """
     Nos quedamos solo con la parte importante del error.
@@ -47,18 +45,23 @@ def _firma_mensaje(mensaje: str) -> str:
       - {"exception":
       - [stacktrace]
       - {"Request : "
-
-    Así, por ejemplo:
-      - errores de DB se quedan en el SQLSTATE...
-      - errores controlados se quedan en 'Error: Parameter Empty - avatars 3'
+    Y, si hay un SQLSTATE=XXXX, nos quedamos hasta ahí.
     """
+
+    # 1) Primero cortamos por exception/stacktrace/Request
     for marker in ('{"exception":', "[stacktrace]", '{"Request : "'):
         pos = mensaje.find(marker)
         if pos != -1:
-            return mensaje[:pos].strip()
+            mensaje = mensaje[:pos]
+            break
 
+    # 2) Si hay un SQLSTATE=XXXX, nos quedamos hasta el final del código
+    m = re.search(r"SQLSTATE=\w+", mensaje)
+    if m:
+        return mensaje[:m.end()].strip()
+
+    # 3) Si no, devolvemos el mensaje tal cual (pero limpiado)
     return mensaje.strip()
-
 
 def _build_stats(path: Path) -> Dict[str, Dict]:
     """
@@ -119,6 +122,11 @@ def resumen_por_fecha(
     - total_hoy: número total de errores ese día
     - repetidos: lista de (firma, count) con count >= umbral_repetidos
     - nuevos: firmas cuya primera aparición en el log es justamente ese día
+    
+    Args:
+        path: ruta del archivo de logs (puede incluir sufijo de app o no)
+        dia: fecha
+        umbral_repetidos: umbral para considerarse "repetido"
     """
     stats = _build_stats(path)
 
@@ -146,8 +154,15 @@ def resumen_por_fecha(
     return total_hoy, repetidos, nuevos
 
 
-def url_logs_para_dia(dia: date) -> str:
+def url_logs_para_dia(dia: date, app_key: str = "driverapp_goto") -> str:
     """
-    Construye la URL a /logs para esa fecha.
+    Construye la URL a /logs para esa fecha de una aplicación específica.
+    
+    Args:
+        dia: fecha del reporte
+        app_key: clave de la aplicación (default: driverapp_goto)
     """
-    return f"{BASE_URL}{LOGS_PATH}?date={dia.isoformat()}"
+    from .config import get_app_urls
+    
+    _, _, logs_url = get_app_urls(app_key)
+    return f"{logs_url}?date={dia.isoformat()}"
