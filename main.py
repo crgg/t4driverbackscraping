@@ -1,13 +1,22 @@
 # main.py
+import os
 import sys
-from pathlib import Path
 from datetime import date
+from pathlib import Path
 
 from app.config import APPS_CONFIG, get_app_credentials
 from app.session_manager import create_logged_session
 from app.logs_scraper import fetch_logs_html, classify_logs
 from app.writer import save_logs
 from app.email_notifier import enviar_resumen_por_correo
+
+from db import (
+    init_db,
+    reset_all_alerted_errors,
+    reset_alerted_errors_for_date,
+)
+from app.error_filter import dividir_nuevos_y_avisados
+
 
 def procesar_aplicacion(app_key: str, fecha_str: str, dia: date) -> None:
     """
@@ -25,6 +34,7 @@ def procesar_aplicacion(app_key: str, fecha_str: str, dia: date) -> None:
         print(f"Procesando: {app_name}")
         print(f"{'='*70}")
         
+        # 1) Scrapping de logs
         with create_logged_session(app_key) as session:
             html = fetch_logs_html(session, fecha_str, app_key)
             
@@ -34,15 +44,31 @@ def procesar_aplicacion(app_key: str, fecha_str: str, dia: date) -> None:
             print(f"✓ HTML guardado en {debug_file}")
             
             controlados, no_controlados = classify_logs(html)
+
+        # 2) Separar en NUEVOS vs AVISADOS usando la BD
+        controlados_nuevos, controlados_avisados = dividir_nuevos_y_avisados(
+            controlados, app_key, dia, "controlado"
+        )
+        no_controlados_nuevos, no_controlados_avisados = dividir_nuevos_y_avisados(
+            no_controlados, app_key, dia, "no_controlado"
+        )
+
+        print(f"  • Errores controlados nuevos: {len(controlados_nuevos)}")
+        print(f"  • Errores controlados avisados antes: {len(controlados_avisados)}")
+        print(f"  • Errores NO controlados nuevos: {len(no_controlados_nuevos)}")
+        print(f"  • Errores NO controlados avisados antes: {len(no_controlados_avisados)}")
         
-        print(f"  • Errores controlados: {len(controlados)}")
-        print(f"  • Errores NO controlados: {len(no_controlados)}")
+        # 3) Guardar SOLO los nuevos, para que el resumen del correo
+        #    sea de lo recién aparecido desde la última ejecución
+        save_logs(
+            controlados_nuevos,
+            no_controlados_nuevos,
+            mode="w",
+            app_key=app_key,
+        )
+        print("✓ Logs guardados en carpeta 'salida_logs' (solo nuevos)")
         
-        # Guardar los logs de esta ejecución sobrescribiendo archivos previos
-        save_logs(controlados, no_controlados, mode="w", app_key=app_key)
-        print(f"✓ Logs guardados en carpeta 'salida_logs'")
-        
-        # Enviar correo con el nombre dinámico de la aplicación
+        # 4) Enviar correo con el nombre dinámico de la aplicación
         enviar_resumen_por_correo(dia, app_name, app_key)
         print(f"✓ Correo enviado para {app_name}")
         
@@ -52,6 +78,9 @@ def procesar_aplicacion(app_key: str, fecha_str: str, dia: date) -> None:
 
 
 def main():
+    # Inicializar la base de datos (crear tabla si no existe)
+    init_db()
+
     # Fecha por parámetro: python main.py 2025-11-26
     if len(sys.argv) >= 2:
         fecha_str = sys.argv[1]
@@ -59,6 +88,22 @@ def main():
     else:
         dia = date.today()
         fecha_str = dia.isoformat()
+
+    # 🔴 LÓGICA DE RESET DE MEMORIA (opcional, vía variables de entorno)
+
+    # 1) Reset TOTAL de todos los avisos (todas las fechas, todas las apps)
+    #    Ejecución:
+    #    RESET_ALERTED_ERRORS_ALL=1 python main.py
+    if os.getenv("RESET_ALERTED_ERRORS_ALL") == "1":
+        reset_all_alerted_errors()
+        print("⚠️ RESET_ALERTED_ERRORS_ALL=1 → TRUNCATE TABLE alerted_errors (se borra TODO)")
+
+    # 2) Reset SOLO de la fecha que se está procesando (dia)
+    #    Ejecución:
+    #    RESET_ALERTED_ERRORS_FOR_DATE=1 python main.py 2025-12-02
+    elif os.getenv("RESET_ALERTED_ERRORS_FOR_DATE") == "1":
+        reset_alerted_errors_for_date(dia)
+        print(f"⚠️ RESET_ALERTED_ERRORS_FOR_DATE=1 → borrar registros de fecha {fecha_str} en alerted_errors")
 
     print(f"📅 Fecha de reporte: {fecha_str}")
     print(f"📧 Procesando {len(APPS_CONFIG)} aplicaciones...\n")
@@ -68,7 +113,7 @@ def main():
         procesar_aplicacion(app_key, fecha_str, dia)
     
     print(f"\n{'='*70}")
-    print(f"✅ Scrapping completado para todas las aplicaciones")
+    print("✅ Scrapping completado para todas las aplicaciones")
     print(f"{'='*70}\n")
 
 
