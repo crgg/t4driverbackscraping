@@ -9,7 +9,6 @@ from app.logs_scraper import fetch_logs_html, classify_logs
 from app.writer import save_logs
 from app.email_notifier import enviar_resumen_por_correo
 
-
 def procesar_aplicacion(app_key: str, fecha_str: str, dia: date) -> None:
     """
     Procesa el scrapping, clasificación y envío de correo para una aplicación.
@@ -39,7 +38,8 @@ def procesar_aplicacion(app_key: str, fecha_str: str, dia: date) -> None:
         print(f"  • Errores controlados: {len(controlados)}")
         print(f"  • Errores NO controlados: {len(no_controlados)}")
         
-        save_logs(controlados, no_controlados, app_key=app_key)
+        # Guardar los logs de esta ejecución sobrescribiendo archivos previos
+        save_logs(controlados, no_controlados, mode="w", app_key=app_key)
         print(f"✓ Logs guardados en carpeta 'salida_logs'")
         
         # Enviar correo con el nombre dinámico de la aplicación

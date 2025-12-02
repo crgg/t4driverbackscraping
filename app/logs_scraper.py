@@ -1,30 +1,60 @@
 # app/logs_scraper.py
+from pathlib import Path
+from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
-from .config import KEYWORDS_NO_CONTROLADO, get_app_urls
-
+from app.config import KEYWORDS_NO_CONTROLADO, get_app_urls
 
 def fetch_logs_html(session, fecha_str: str, app_key: str = "driverapp_goto") -> str:
     """
     Obtiene el HTML de los logs para una fecha dada de una aplicación específica.
-    
-    Args:
-        session: sesión autenticada (requests.Session)
-        fecha_str: fecha en formato "YYYY-MM-DD"
-        app_key: clave de la aplicación en APPS_CONFIG
-    
-    Returns:
-        HTML de la página de logs
-    """
-    _, _, logs_url = get_app_urls(app_key)
-    
-    params = {
-        "date": fecha_str,
-    }
-    resp = session.get(logs_url, params=params)
-    resp.raise_for_status()
-    return resp.text
 
+    Hace dos pasos:
+    1) GET /logs -> lista de archivos (laravel-YYYY-MM-DD.log y sus ?l=...)
+    2) Busca el enlace correspondiente a la fecha pedida y hace GET a ese ?l=...
+    """
+    # 1) Obtenemos la URL base de logs para esa app
+    _, _, logs_url = get_app_urls(app_key)
+
+    # 2) Cargamos la página principal de logs (lista de archivos)
+    resp_index = session.get(logs_url, timeout=30)
+    resp_index.raise_for_status()
+    index_html = resp_index.text
+
+    soup = BeautifulSoup(index_html, "html.parser")
+
+    # Nombre del archivo que queremos, tal como aparece en la lista
+    target_log_name = f"laravel-{fecha_str}.log"
+
+    link_tag = None
+    for a in soup.select("div.list-group a"):
+        text = (a.get_text() or "").strip()
+        if text == target_log_name:
+            link_tag = a
+            break
+
+    if link_tag is None:
+        # Aquí decides qué hacer si no existe log de ese día:
+        # puedes devolver la página de índice, una cadena vacía,
+        # o lanzar una excepción. Yo prefiero lanzar error explícito.
+        raise RuntimeError(
+            f"No se encontró el archivo {target_log_name} en la lista de logs de {app_key}"
+        )
+
+    # href viene en formato "?l=eyJpdiI6..."
+    href = link_tag.get("href") or ""
+    logs_day_url = urljoin(logs_url, href)
+
+    # 3) Cargamos ahora SÍ el log correspondiente a esa fecha
+    resp_day = session.get(logs_day_url, timeout=30)
+    resp_day.raise_for_status()
+    logs_html = resp_day.text
+
+    # Guardamos para depurar, como ya hacías
+    debug_path = Path(f"debug_logs_{app_key}.html")
+    debug_path.write_text(logs_html, encoding="utf-8")
+
+    return logs_html
 
 def _es_no_controlado(texto: str) -> bool:
     """
