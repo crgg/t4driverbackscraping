@@ -6,11 +6,11 @@ services:
     container_name: scrapping_pg
     restart: always
     environment:
-      POSTGRES_USER: logs_user
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: logs_password
-      POSTGRES_DB: logs_db
+      POSTGRES_DB: postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
