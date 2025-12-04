@@ -21,3 +21,18 @@ Script que:
 - Python 3.10+ (se uso el 3.12.4 aqui)
 - Instalar dependencias:
 pip install -r requirements.txt
+
+ATENCION: Para activar la automatizacion de scrapping y envio de correos con los avisos de los errores, 
+se debe ejecutar en la carpeta scrapping_project el siguiente comando:
+
+ python scheduler/scheduler_main.py
+
+eso logra que la libreria APScheduler ejecute main.py de la carpeta principal, cada 1 minuto -para pruebas-,
+para lograr el modo produccion y recibir correos cada por ejemplo, 4 horas, se debe cambiar el valor de la variable 
+de entorno del .env, llamada SCHED_ENV, actualmente vale test, para cambiarla a produccion se debe colocar como valor: prod,
+esto da al envio de correos una extension en el tiempo en que se mandan los correos, los cuales se definen en config.py 
+de la carpeta scheduler.
+
+Para probar el envio de correos no automatizado, si no de los errores que hay registrados hasta cierto momento especifico del dia, solo ejecutar:
+
+python main.py

@@ -50,9 +50,9 @@ def fetch_logs_html(session, fecha_str: str, app_key: str = "driverapp_goto") ->
     resp_day.raise_for_status()
     logs_html = resp_day.text
 
-    # Guardamos para depurar, como ya hacías
-    debug_path = Path(f"debug_logs_{app_key}.html")
-    debug_path.write_text(logs_html, encoding="utf-8")
+    # # DEBUG - Guardamos para depurar, como ya hacías
+    # debug_path = Path(f"debug_logs_{app_key}.html")
+    # debug_path.write_text(logs_html, encoding="utf-8")
 
     return logs_html
 

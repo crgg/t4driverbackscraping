@@ -224,3 +224,6 @@ debug_logs.html
 
 # logs innecesarios de guardar 
 *.log 
+
+# archivo que avisa de la ultima ejecucion exitosa del envio de correos automatico 
+last_success.txt 
