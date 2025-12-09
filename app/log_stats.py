@@ -87,7 +87,8 @@ def _build_stats(path: Path) -> Dict[str, Dict]:
             if not data:
                 continue
 
-            d = data["fecha"].date()
+            dt = data["fecha"]
+            d_date = dt.date()
             firma = _firma_mensaje(data["mensaje"])
 
             info = stats.setdefault(
@@ -95,17 +96,17 @@ def _build_stats(path: Path) -> Dict[str, Dict]:
                 {
                     "total": 0,
                     "by_date": Counter(),
-                    "first": d,
-                    "last": d,
+                    "first": dt,
+                    "last": dt,
                 },
             )
 
             info["total"] += 1
-            info["by_date"][d] += 1
-            if d < info["first"]:
-                info["first"] = d
-            if d > info["last"]:
-                info["last"] = d
+            info["by_date"][d_date] += 1
+            if dt < info["first"]:
+                info["first"] = dt
+            if dt > info["last"]:
+                info["last"] = dt
 
     return stats
 
@@ -114,7 +115,7 @@ def resumen_por_fecha(
     path: Path,
     dia: date,
     umbral_repetidos: int = 3,
-) -> Tuple[int, List[Tuple[str, int]], List[Tuple[str, int]]]:
+) -> Tuple[int, List[Tuple[str, int]], List[Tuple[str, datetime]]]:
     """
     Devuelve:
       total_hoy, lista_repetidos, lista_nuevos
@@ -144,10 +145,10 @@ def resumen_por_fecha(
         if n_hoy >= umbral_repetidos:
             repetidos.append((firma, n_hoy))
 
-        if info["first"] == dia:
-            nuevos.append((firma, n_hoy))
+        if info["first"].date() == dia:
+            nuevos.append((firma, info["first"]))
 
-    # Ordenar de más a menos frecuente
+    # Ordenar: repetidos por cantidad (desc), nuevos por fecha (desc)
     repetidos.sort(key=lambda x: x[1], reverse=True)
     nuevos.sort(key=lambda x: x[1], reverse=True)
 

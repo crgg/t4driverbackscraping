@@ -1,5 +1,5 @@
 # app/email_notifier.py
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import List, Tuple
 
@@ -38,14 +38,76 @@ def _get_log_paths(app_key: str):
 
 
 
-def _html_lista(titulo: str, items: List[Tuple[str, int]]) -> str:
+
+def _formatear_mensaje_sql(mensaje: str) -> str:
+    """
+    Detecta mensajes de error SQL y resalta en negrita y rojo la parte específica del error.
+    
+    Por ejemplo, en:
+    "SQL0911N The current transaction has been rolled back... SQLSTATE=40001"
+    
+    Resalta en rojo: "The current transaction has been rolled back..."
+    que está entre SQL0911N y SQLSTATE
+    
+    Args:
+        mensaje: texto del mensaje de error
+    
+    Returns:
+        mensaje formateado con HTML si es SQL, o el mensaje original
+    """
+    import re
+    
+    # Patrón para detectar errores SQL: SQL seguido de dígitos y letra N, luego texto, luego SQLSTATE
+    # Ejemplos: SQL30081N, SQL0911N, SQL0803N
+    patron = r'(SQL\d+N)\s+(.*?)\s+(SQLSTATE[=\[])'
+    
+    def reemplazar_match(match):
+        codigo_sql = match.group(1)  # Ej: SQL0911N
+        mensaje_error = match.group(2)  # El mensaje específico
+        sqlstate = match.group(3)  # SQLSTATE= o SQLSTATE[
+        
+        # Resaltar el mensaje de error en rojo y negrita
+        return f'{codigo_sql} <strong style="color: red;">{mensaje_error}</strong> {sqlstate}'
+    
+    # Aplicar el reemplazo
+    mensaje_formateado = re.sub(patron, reemplazar_match, mensaje)
+    
+    return mensaje_formateado
+
+
+def _html_lista_repetidos(titulo: str, items: List[Tuple[str, int]]) -> str:
+    """
+    Formato para repetidos:
+    NO lleva fecha al inicio.
+    Lleva count al final, dentro de paréntesis.
+    """
     if not items:
         return f"<h3>{titulo}</h3><p>Sin elementos.</p>"
 
     lineas = [f"<h3>{titulo}</h3>", "<ul>"]
     for firma, count in items:
-        firma_corta = firma if len(firma) <= 400 else firma[:400] + "..."
-        lineas.append(f"<li><strong>{count}×</strong> — {firma_corta}</li>")
+        # Mostrar contenido completo sin truncar y formatear SQL
+        firma_formateada = _formatear_mensaje_sql(firma)
+        lineas.append(f"<li>{firma_formateada} <strong>({count} veces)</strong></li>")
+    lineas.append("</ul>")
+    return "\n".join(lineas)
+
+
+def _html_lista_nuevos(titulo: str, items: List[Tuple[str, datetime]]) -> str:
+    """
+    Formato para nuevos:
+    Lleva fecha al inicio.
+    NO lleva count.
+    """
+    if not items:
+        return f"<h3>{titulo}</h3><p>Sin elementos.</p>"
+
+    lineas = [f"<h3>{titulo}</h3>", "<ul>"]
+    for firma, first_dt in items:
+        fecha_str = first_dt.strftime("%Y-%m-%d %H:%M:%S")
+        # Mostrar contenido completo sin truncar y formatear SQL
+        firma_formateada = _formatear_mensaje_sql(firma)
+        lineas.append(f"<li><strong>{fecha_str}</strong> — {firma_formateada}</li>")
     lineas.append("</ul>")
     return "\n".join(lineas)
 
@@ -74,10 +136,10 @@ def construir_html_resumen(dia: date, app_name: str = "DriverApp GO2", app_key: 
         f"<h2>Resumen de errores {app_name} — {dia.isoformat()}</h2>",
         f"<p>Total errores <strong>NO controlados</strong> hoy: <strong>{total_nc}</strong></p>",
         f"<p>Total errores <strong>controlados</strong> hoy: <strong>{total_c}</strong></p>",
-        _html_lista("NO controlados repetidos hoy (>=3 veces)", repetidos_nc),
-        _html_lista("NO controlados NUEVOS hoy", nuevos_nc),
-        _html_lista("Controlados repetidos hoy (>=3 veces)", repetidos_c),
-        _html_lista("Controlados NUEVOS hoy", nuevos_c),
+        _html_lista_repetidos("NO controlados repetidos hoy (>=3 veces)", repetidos_nc),
+        _html_lista_nuevos("NO controlados NUEVOS hoy", nuevos_nc),
+        _html_lista_repetidos("Controlados repetidos hoy (>=3 veces)", repetidos_c),
+        _html_lista_nuevos("Controlados NUEVOS hoy", nuevos_c),
         f'<p>Más detalles: <a href="{url_logs}">{url_logs}</a></p>',
     ]
 

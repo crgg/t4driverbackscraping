@@ -141,12 +141,9 @@ def classify_logs(html: str):
         else:
             tipo_lista = errores_controlados
 
-        # ...pero mostramos una versión resumida
-        mensaje_resumido = _resumir_mensaje(content)
-
-        # Formato que querías:
-        # ERROR - production - 2025-11-26 14:04:48 - Mensaje resumido
-        log_line = f"{level.upper()} - {context} - {fecha} - {mensaje_resumido}"
+        # Formato completo sin resumir:
+        # ERROR - production - 2025-11-26 14:04:48 - Mensaje completo
+        log_line = f"{level.upper()} - {context} - {fecha} - {content}"
         tipo_lista.append(log_line)
 
     return errores_controlados, errores_no_controlados
