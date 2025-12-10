@@ -19,4 +19,6 @@ def notificar_app(resultado: Dict[str, Any]) -> None:
     print(f"✓ Correo enviado para {app_name}")
     
     # Enviar SMS (solo si hay errores NO controlados)
-    enviar_sms_errores_no_controlados(resultado)
+    sms_enviado = enviar_sms_errores_no_controlados(resultado)
+    if sms_enviado:
+        print(f"✓ SMS enviado para {app_name}")

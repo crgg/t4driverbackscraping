@@ -69,7 +69,7 @@ def _generar_mensaje_sms(resultado: Dict[str, Any]) -> str:
     return mensaje
 
 
-def enviar_sms_errores_no_controlados(resultado: Dict[str, Any]) -> None:
+def enviar_sms_errores_no_controlados(resultado: Dict[str, Any]) -> bool:
     """
     Envía un SMS si hay errores NO controlados en el resultado del scraping.
     
@@ -88,7 +88,7 @@ def enviar_sms_errores_no_controlados(resultado: Dict[str, Any]) -> None:
             - controlados_nuevos: lista de errores controlados nuevos (opcional)
     
     Returns:
-        None
+        bool: True si se envió correctamente, False en caso contrario
     """
     app_name = resultado.get("app_name", "App")
     app_key = resultado.get("app_key", "unknown")
@@ -100,7 +100,7 @@ def enviar_sms_errores_no_controlados(resultado: Dict[str, Any]) -> None:
             f"ℹ️ No se envía SMS para {app_name}: "
             "No hay errores NO controlados nuevos"
         )
-        return
+        return False
     
     try:
         # Inicializar cliente de Twilio
@@ -121,6 +121,8 @@ def enviar_sms_errores_no_controlados(resultado: Dict[str, Any]) -> None:
             logger.warning(
                 f"⚠️ No se pudo enviar SMS para {app_name}"
             )
+        
+        return exito
     
     except Exception as e:
         # Capturar cualquier error para no interrumpir el flujo principal
@@ -128,3 +130,4 @@ def enviar_sms_errores_no_controlados(resultado: Dict[str, Any]) -> None:
             f"❌ Error inesperado al enviar SMS para {app_name}: {e}",
             exc_info=True
         )
+        return False

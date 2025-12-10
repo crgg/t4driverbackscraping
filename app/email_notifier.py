@@ -133,13 +133,9 @@ def construir_html_resumen(dia: date, app_name: str = "DriverApp GO2", app_key: 
     url_logs = url_logs_para_dia(dia, app_key)
 
     partes = [
-        f"<h2>Resumen de errores {app_name} — {dia.isoformat()}</h2>",
-        f"<p>Total errores <strong>NO controlados</strong> hoy: <strong>{total_nc}</strong></p>",
-        f"<p>Total errores <strong>controlados</strong> hoy: <strong>{total_c}</strong></p>",
+        f'<h2 style="color: blue;">Resumen de errores {app_name} — {dia.isoformat()}</h2>',
         _html_lista_repetidos("NO controlados repetidos hoy (>=3 veces)", repetidos_nc),
-        _html_lista_nuevos("NO controlados NUEVOS hoy", nuevos_nc),
-        _html_lista_repetidos("Controlados repetidos hoy (>=3 veces)", repetidos_c),
-        _html_lista_nuevos("Controlados NUEVOS hoy", nuevos_c),
+        _html_lista_nuevos("NO controlados - Primer horario de aparicion", nuevos_nc),
         f'<p>Más detalles: <a href="{url_logs}">{url_logs}</a></p>',
     ]
 
@@ -157,8 +153,8 @@ def enviar_resumen_por_correo(dia: date, app_name: str = "DriverApp GO2", app_ke
     """
     html, total_nc, total_c = construir_html_resumen(dia, app_name, app_key)
 
-    # Si no hay errores, ni molestamos
-    if total_nc == 0 and total_c == 0:
+    # Si no hay errores no controlados, no enviamos nada (ignoramos los controlados)
+    if total_nc == 0:
         return
 
     subject = f"[{app_name}] Errores {dia.isoformat()} — NC:{total_nc} / C:{total_c}"

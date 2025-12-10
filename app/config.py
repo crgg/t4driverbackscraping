@@ -17,7 +17,7 @@ KEYWORDS_NO_CONTROLADO = [
 # Estructura: {clave_aplicacion: {config_dict}}
 APPS_CONFIG: Dict[str, Dict] = {
     "driverapp_goto": {
-        "name": "DriverApp GoTo Logistics",
+        "name": "GoTo Logistics",
         "base_url": "https://driverapp.goto-logistics.com",
         "login_path": "/login",
         "logs_path": "/logs",

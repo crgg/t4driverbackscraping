@@ -65,6 +65,12 @@ def main() -> None:
 
     print(f"\n{'='*70}")
     print("✅ Scrapping completado para todas las aplicaciones")
+    
+    # Mostrar número de destino SMS
+    twilio_number = os.getenv("TWILIO_TO_NUMBER")
+    if twilio_number:
+        print(f"📱 SMS enviados al número: {twilio_number}")
+        
     print(f"{'='*70}\n")
 
 
