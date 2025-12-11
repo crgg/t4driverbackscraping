@@ -167,3 +167,83 @@ def url_logs_para_dia(dia: date, app_key: str = "driverapp_goto") -> str:
     
     _, _, logs_url = get_app_urls(app_key)
     return f"{logs_url}?date={dia.isoformat()}"
+
+
+def get_daily_errors(
+    path: Path,
+    dia: date
+) -> List[Dict]:
+    """
+    Parsea los logs y retorna una lista de errores para el día especificado.
+    
+    Retorna una lista de dicts con:
+    [
+        {
+            "firma": str,
+            "first_time": datetime,
+            "count": int
+        },
+        ...
+    ]
+    
+    Args:
+        path: ruta del log
+        dia: fecha a filtrar
+    """
+    stats = _build_stats(path)
+    
+    daily_errors = []
+    
+    for firma, info in stats.items():
+        # Verificamos si hubo errores este día
+        count_today = info["by_date"].get(dia, 0)
+        
+        if count_today > 0:
+            # Necesitamos encontrar la primera ocurrencia *de este día*
+            # Como _build_stats solo guarda 'first' global, necesitamos re-escanear o 
+            # modificar _build_stats. Pero para no romper lo existente,
+            # haremos un escaneo ligero aquí o asumiremos que el sorting en el email 
+            # se encargará si guardamos info. 
+            # 
+            # ERROR: _build_stats no guarda el primer error DEL DIA, guarda el primero GLOBAL.
+            # Necesitamos parsear el archivo de nuevo o modificar _build_stats.
+            # Dado que leer el archivo es "barato" para estos logs, haremos una lectura filtrada directa.
+            pass
+
+    # Re-implementación clean para obtener lo exacto que pide el usuario sin depender de la agregación global
+    # que podría perder la hora exacta del primer error DEL DÍA.
+    
+    errors_map = {} # firma -> {first_time: dt, count: int}
+    
+    if path.exists():
+        with path.open(encoding="utf-8") as f:
+            for line in f:
+                data = _parse_log_line(line)
+                if not data:
+                    continue
+                
+                dt = data["fecha"]
+                if dt.date() != dia:
+                    continue
+                
+                firma = _firma_mensaje(data["mensaje"])
+                
+                if firma not in errors_map:
+                    errors_map[firma] = {
+                        "firma": firma,
+                        "first_time": dt,
+                        "count": 0
+                    }
+                
+                errors_map[firma]["count"] += 1
+                
+                # Actualizar first_time si encontramos uno anterior (aunque log suele ser cronológico)
+                if dt < errors_map[firma]["first_time"]:
+                    errors_map[firma]["first_time"] = dt
+
+    results = list(errors_map.values())
+    
+    # Ordenar por fecha de aparición
+    results.sort(key=lambda x: x["first_time"])
+    
+    return results

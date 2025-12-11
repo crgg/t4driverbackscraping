@@ -48,6 +48,14 @@ APPS_CONFIG: Dict[str, Dict] = {
         "username_env": "ACCURATECARGO_USER",
         "password_env": "ACCURATECARGO_PASS",
     },
+    "broker_goto": {
+        "name": "Broker GoTo Logistics",
+        "base_url": "https://broker.goto-logistics.com",
+        "login_path": "/login",
+        "logs_path": "/logs",
+        "username_env": "BROKER_GOTO_USER",
+        "password_env": "BROKER_GOTO_PASS",
+    },
 }
 
 

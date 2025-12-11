@@ -1,5 +1,6 @@
 # sms/sms_notifier.py
 import logging
+import time
 from typing import Dict, Any
 from datetime import date
 
@@ -69,6 +70,29 @@ def _generar_mensaje_sms(resultado: Dict[str, Any]) -> str:
     return mensaje
 
 
+# Cliente singleton compartido para evitar race conditions
+_twilio_cliente_singleton = None
+
+
+def _obtener_cliente_twilio() -> TwilioSMSClient:
+    """
+    Obtiene o crea el cliente singleton de Twilio.
+    
+    Esto previene el bug donde crear múltiples clientes en rápida sucesión
+    causa errores 404 en la APIREST de Twilio.
+    
+    Returns:
+        TwilioSMSClient: Instancia singleton del cliente
+    """
+    global _twilio_cliente_singleton
+    
+    if _twilio_cliente_singleton is None:
+        _twilio_cliente_singleton = TwilioSMSClient()
+        logger.debug("✓ Cliente singleton de Twilio creado")
+    
+    return _twilio_cliente_singleton
+
+
 def enviar_sms_errores_no_controlados(resultado: Dict[str, Any]) -> bool:
     """
     Envía un SMS si hay errores NO controlados en el resultado del scraping.
@@ -103,8 +127,8 @@ def enviar_sms_errores_no_controlados(resultado: Dict[str, Any]) -> bool:
         return False
     
     try:
-        # Inicializar cliente de Twilio
-        cliente = TwilioSMSClient()
+        # Usar cliente singleton (compartido entre todos los envíos)
+        cliente = _obtener_cliente_twilio()
         
         # Generar mensaje
         mensaje = _generar_mensaje_sms(resultado)
@@ -117,6 +141,9 @@ def enviar_sms_errores_no_controlados(resultado: Dict[str, Any]) -> bool:
                 f"✅ SMS enviado para {app_name}: "
                 f"{len(no_controlados_nuevos)} errores NO controlados"
             )
+            # Delay para cumplir con rate limit de Twilio Trial (1 SMS/segundo)
+            # Usamos 3 segundos para dar margen y evitar errores 404
+            time.sleep(3)
         else:
             logger.warning(
                 f"⚠️ No se pudo enviar SMS para {app_name}"

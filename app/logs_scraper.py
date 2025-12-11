@@ -23,23 +23,42 @@ def fetch_logs_html(session, fecha_str: str, app_key: str = "driverapp_goto") ->
 
     soup = BeautifulSoup(index_html, "html.parser")
 
-    # Nombre del archivo que queremos, tal como aparece en la lista
-    target_log_name = f"laravel-{fecha_str}.log"
+    # Nombre del archivo estándar
+    target_date_suffix = f"-{fecha_str}.log"
+    strict_target = f"laravel-{fecha_str}.log"
 
     link_tag = None
+    available_files = []
+    
+    # Recorremos todos los links para buscar match
     for a in soup.select("div.list-group a"):
         text = (a.get_text() or "").strip()
-        if text == target_log_name:
+        available_files.append(text)
+        
+        # 1. Prioridad: Coincidencia exacta
+        if text == strict_target:
             link_tag = a
             break
-
+        
+        # 2. Fallback: Coincidencia parcial por fecha (ej: worker-2025-12-11.log)
+        # Solo si no hemos encontrado uno estricto aún
+        if link_tag is None and text.endswith(target_date_suffix):
+            link_tag = a
+            # No hacemos break inmediato por si luego aparece el estricto, 
+            # pero en este loop simple, si aparece el estricto después, lo sobrescribiría?
+            # Mejor: Si encontramos el estricto, break. Si encontramos parcial, guardamos y seguimos.
+            # Pero para simplificar: si encontramos strict -> break.
+            
+    # Si después del loop tenemos un link_tag (ya sea estricto o parcial), lo usamos.
+    
     if link_tag is None:
-        # Aquí decides qué hacer si no existe log de ese día:
-        # puedes devolver la página de índice, una cadena vacía,
-        # o lanzar una excepción. Yo prefiero lanzar error explícito.
-        raise RuntimeError(
-            f"No se encontró el archivo {target_log_name} en la lista de logs de {app_key}"
+        # Debug info: imprimir qué archivos había
+        msg = (
+            f"No se encontró log para {fecha_str} en {app_key}. "
+            f"Buscado: *{target_date_suffix}. "
+            f"Archivos disponibles: {available_files}"
         )
+        raise RuntimeError(msg)
 
     # href viene en formato "?l=eyJpdiI6..."
     href = link_tag.get("href") or ""

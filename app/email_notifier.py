@@ -75,71 +75,117 @@ def _formatear_mensaje_sql(mensaje: str) -> str:
     return mensaje_formateado
 
 
-def _html_lista_repetidos(titulo: str, items: List[Tuple[str, int]]) -> str:
+def _html_lista_errores(titulo: str, errors: List[dict], empty_msg: str = "Sin elementos.") -> str:
     """
-    Formato para repetidos:
-    NO lleva fecha al inicio.
-    Lleva count al final, dentro de paréntesis.
+    Formato genérico de lista de errores:
+    HEADER
+    YYYY-MM-DD HH:MM:SS — Error msg (xN)
     """
-    if not items:
-        return f"<h3>{titulo}</h3><p>Sin elementos.</p>"
+    if not errors:
+        return f"<h3>{titulo}</h3><p>{empty_msg}</p>"
 
     lineas = [f"<h3>{titulo}</h3>", "<ul>"]
-    for firma, count in items:
-        # Mostrar contenido completo sin truncar y formatear SQL
-        firma_formateada = _formatear_mensaje_sql(firma)
-        lineas.append(f"<li>{firma_formateada} <strong>({count} veces)</strong></li>")
-    lineas.append("</ul>")
-    return "\n".join(lineas)
-
-
-def _html_lista_nuevos(titulo: str, items: List[Tuple[str, datetime]]) -> str:
-    """
-    Formato para nuevos:
-    Lleva fecha al inicio.
-    NO lleva count.
-    """
-    if not items:
-        return f"<h3>{titulo}</h3><p>Sin elementos.</p>"
-
-    lineas = [f"<h3>{titulo}</h3>", "<ul>"]
-    for firma, first_dt in items:
-        fecha_str = first_dt.strftime("%Y-%m-%d %H:%M:%S")
-        # Mostrar contenido completo sin truncar y formatear SQL
-        firma_formateada = _formatear_mensaje_sql(firma)
-        lineas.append(f"<li><strong>{fecha_str}</strong> — {firma_formateada}</li>")
+    for err in errors:
+        fecha_str = err["first_time"].strftime("%Y-%m-%d %H:%M:%S")
+        firma_formateada = _formatear_mensaje_sql(err["firma"])
+        
+        count_suffix = ""
+        # Mostrar cuenta, en negrita: (xN)
+        # O si el usuario prefiere "colocar al final la cantidad de veces que se repite, en negrita, por ejemplo x2"
+        # Asumo siempre mostramos la cantidad si > 1, o incluso si es 1 para consistencia?
+        # El ejemplo dice: "The current... (colocar al final la cantidad..., por ejemplo x2)"
+        # Si es 1 vez, quizá queda mejor no poner nada o poner (x1). Pondré (xN) siempre para ser claro, o solo si > 1.
+        # El request dice: "colocar al final la cantidad de veces que se repite, en negrita, por ejemplo x2" 
+        # Lo haré para todos.
+        
+        lineas.append(f"<li><strong>{fecha_str}</strong> — {firma_formateada} <strong>(x{err['count']})</strong></li>")
+        
     lineas.append("</ul>")
     return "\n".join(lineas)
 
 
 def construir_html_resumen(dia: date, app_name: str = "DriverApp GO2", app_key: str = "driverapp_goto") -> tuple[str, int, int]:
     """
-    Construye el HTML del resumen de errores.
+    Construye el HTML del resumen de errores con el nuevo formato.
     
     Args:
         dia: fecha del reporte
-        app_name: nombre de la aplicación (ej: "DriverApp GoTo Logistics")
-        app_key: clave de la aplicación para obtener URLs y logs
+        app_name: nombre de la aplicación
+        app_key: clave de la aplicación
     
     Returns:
         (html_content, total_no_controlados, total_controlados)
     """
+    from .log_stats import get_daily_errors
+    
     # Obtener rutas específicas de la app
     no_controlados_path, controlados_path = _get_log_paths(app_key)
     
-    total_nc, repetidos_nc, nuevos_nc = resumen_por_fecha(no_controlados_path, dia)
-    total_c, repetidos_c, nuevos_c = resumen_por_fecha(controlados_path, dia)
+    # Usar get_daily_errors
+    nc_errors = get_daily_errors(no_controlados_path, dia)
+    c_errors = get_daily_errors(controlados_path, dia)
+    
+    total_nc = sum(e["count"] for e in nc_errors)
+    total_c = sum(e["count"] for e in c_errors)
 
     url_logs = url_logs_para_dia(dia, app_key)
 
+    # Construir HTML
+    # Formato Header: Company: GoTo Logistics — 2025-12-11
+    # Antes era azul, ahora negro (sin style color o color: black).
+    
+    # Mapping de nombres para el header
+    display_names = {
+        "driverapp_goto": "Go 2 Logistics",
+    }
+    display_name = display_names.get(app_key, app_name)
+    
+    header = f'<h2>Company: {display_name} — {dia.isoformat()}</h2>'
+    
+    # "Errores (no controlados)" pasa a ser "Errores" y en rojo.
+    # "Errores (controlados)" se mantiene el texto (creo, el user dijo "donde dice Errores (controlados), ese subtitulo cambialo a color azul")
+    # pero para el primero dijo "donde dice Errores (no controlados), ahora debe decir Errores"
+    
+    html_nc = _html_lista_errores('<span style="color: red;">Errores</span>', nc_errors, empty_msg="Sin elementos.")
+    html_c = _html_lista_errores('<span style="color: blue;">Errores (controlados)</span>', c_errors, empty_msg="No existen novedades")
+    
     partes = [
-        f'<h2 style="color: blue;">Resumen de errores {app_name} — {dia.isoformat()}</h2>',
-        _html_lista_repetidos("NO controlados repetidos hoy (>=3 veces)", repetidos_nc),
-        _html_lista_nuevos("NO controlados - Primer horario de aparicion", nuevos_nc),
+        header,
+        html_nc,
+        html_c,
         f'<p>Más detalles: <a href="{url_logs}">{url_logs}</a></p>',
     ]
 
     return "\n".join(partes), total_nc, total_c
+
+
+def _get_subject(app_key: str, dia: date) -> str:
+    """
+    Genera el asunto del correo según app_key.
+    Formato: 🔥 [Prefix - Name] Errores YYYY-MM-DD
+    """
+    date_str = dia.isoformat()
+    
+    # Mapping personalizado
+    # driverapp_goto -> [DRIVERAPP - GO 2 LOGISTICS]
+    # goexperior    -> [DRIVERAPP - GOEXPERIOR]
+    # accuratecargo -> [T4APP - ACCURATECARGO]
+    # klc           -> [T4APP - KLC]
+    # broker_goto   -> [BROKER - GO 2 LOGISTICS]
+    
+    subjects = {
+        "driverapp_goto": f"[DRIVERAPP - GO 2 LOGISTICS] Errores {date_str}",
+        "goexperior": f"[DRIVERAPP - GOEXPERIOR] Errores {date_str}",
+        "accuratecargo": f"[T4APP - ACCURATECARGO] Errores {date_str}",
+        "klc": f"[T4APP - KLC] Errores {date_str}",
+        "broker_goto": f"[BROKER - GO 2 LOGISTICS] Errores {date_str}",
+    }
+    
+    # Fallback genérico si agregamos nuevas apps
+    fallback_key = app_key.replace("_", " ").upper()
+    base = subjects.get(app_key, f"[{fallback_key}] Errores {date_str}")
+    
+    return f"🔥 {base}"
 
 
 def enviar_resumen_por_correo(dia: date, app_name: str = "DriverApp GO2", app_key: str = "driverapp_goto") -> None:
@@ -148,8 +194,8 @@ def enviar_resumen_por_correo(dia: date, app_name: str = "DriverApp GO2", app_ke
     
     Args:
         dia: fecha del reporte
-        app_name: nombre de la aplicación (ej: "DriverApp GoTo Logistics")
-        app_key: clave de la aplicación para obtener URLs
+        app_name: nombre de la aplicación
+        app_key: clave de la aplicación
     """
     html, total_nc, total_c = construir_html_resumen(dia, app_name, app_key)
 
@@ -157,8 +203,17 @@ def enviar_resumen_por_correo(dia: date, app_name: str = "DriverApp GO2", app_ke
     if total_nc == 0:
         return
 
-    subject = f"[{app_name}] Errores {dia.isoformat()} — NC:{total_nc} / C:{total_c}"
+    subject = _get_subject(app_key, dia)
+
+    # Determinar sender_name
+    sender_name = "driverapp-logs" # Default
+    if "T4APP" in subject:
+        sender_name = "t4app-logs"
+    elif "BROKER" in subject:
+        sender_name = "broker-logs"
+    elif "DRIVERAPP" in subject:
+        sender_name = "driverapp-logs"
 
     recipients = default_recipients()  # usa ALERT_EMAIL_TO o MAIL_USERNAME
 
-    send_email(subject, html, recipients)
+    send_email(subject, html, recipients, sender_name=sender_name)

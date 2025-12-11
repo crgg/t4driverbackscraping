@@ -38,7 +38,7 @@ def _smtp_client():
     return server
 
 
-def send_email(subject: str, html_body: str, to_addrs: list[str]):
+def send_email(subject: str, html_body: str, to_addrs: list[str], sender_name: str | None = None):
     """
     Envío directo, sin anti-spam.
     """
@@ -51,7 +51,7 @@ def send_email(subject: str, html_body: str, to_addrs: list[str]):
     msg = EmailMessage()
 
     from_addr = os.getenv("MAIL_FROM_ADDRESS") or os.getenv("MAIL_USERNAME")
-    from_name = os.getenv("MAIL_FROM_NAME") or "driverapp-logs"
+    from_name = sender_name or os.getenv("MAIL_FROM_NAME") or "driverapp-logs"
 
     msg["From"] = f"{from_name} <{from_addr}>"
     msg["To"] = ", ".join(to_addrs)

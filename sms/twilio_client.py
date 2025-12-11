@@ -1,6 +1,7 @@
 # sms/twilio_client.py
 import os
 import logging
+import time
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -117,48 +118,77 @@ class TwilioSMSClient:
                 "Twilio puede dividirlo en múltiples SMS."
             )
         
-        try:
-            client = self._get_client()
-            
-            logger.info(f"📤 Enviando SMS a {destino}...")
-            logger.debug(f"Mensaje: {mensaje}")
-            
-            message = client.messages.create(
-                body=mensaje,
-                from_=self.from_number,
-                to=destino
-            )
-            
-            logger.info(
-                f"✅ SMS enviado exitosamente. SID: {message.sid}, "
-                f"Status: {message.status}"
-            )
-            return True
-            
-        except ImportError as e:
-            logger.error(f"❌ Error de importación: {e}")
-            return False
-            
-        except Exception as e:
-            # Capturar errores específicos de Twilio
-            error_msg = str(e)
-            
-            if "Unable to create record" in error_msg:
-                logger.error(
-                    f"❌ No se pudo enviar SMS: El número {destino} no está "
-                    "verificado en tu cuenta de Twilio. Para cuentas de prueba, "
-                    "debes verificar el número destino en: "
-                    "https://console.twilio.com/us1/develop/phone-numbers/manage/verified"
+        # Reintentos con backoff exponencial para manejar errores transitorios
+        max_intentos = 3
+        for intento in range(1, max_intentos + 1):
+            try:
+                client = self._get_client()
+                
+                # FIX: Hacer un fetch de la cuenta antes de enviar el mensaje
+                # Esto resuelve un bug/quirk en la librería Twilio donde
+                # messages.create() falla con HTTP 404 si no se ha hecho
+                # ninguna otra operación API primero.
+                # Esto solo afecta a algunas cuentas Trial.
+                # El fetch es OBLIGATORIO, no opcional.
+                account = client.api.accounts(self.account_sid).fetch()
+                logger.debug(f"✓ Cliente Twilio inicializado: {account.friendly_name}")
+                # Pequeño delay para asegurar que el cliente está listo
+                time.sleep(0.5)
+                
+                logger.info(f"📤 Enviando SMS a {destino}... (intento {intento}/{max_intentos})")
+                logger.debug(f"Mensaje: {mensaje}")
+                
+                message = client.messages.create(
+                    body=mensaje,
+                    from_=self.from_number,
+                    to=destino
                 )
-            elif "insufficient balance" in error_msg.lower():
-                logger.error("❌ Saldo insuficiente en tu cuenta de Twilio")
-            elif "not a valid phone number" in error_msg.lower():
-                logger.error(f"❌ Número de teléfono inválido: {destino}")
-            else:
-                logger.error(f"❌ Error al enviar SMS: {error_msg}")
-            
-            logger.exception(e)  # Log completo del stack trace
-            return False
+                
+                logger.info(
+                    f"✅ SMS enviado exitosamente. SID: {message.sid}, "
+                    f"Status: {message.status}"
+                )
+                return True
+                
+            except Exception as e:
+                error_str = str(e)
+                
+                # Si es el último intento, propagar el error
+                if intento == max_intentos:
+                    # Capturar errores específicos de Twilio (código original)
+                    if "Unable to create record" in error_str:
+                        logger.error(
+                            f"❌ No se pudo enviar SMS: El número {destino} no está "
+                            "verificado en tu cuenta de Twilio. Para cuentas de prueba, "
+                            "debes verificar el número destino en: "
+                            "https://console.twilio.com/us1/develop/phone-numbers/manage/verified"
+                        )
+                    elif "insufficient balance" in error_str.lower():
+                        logger.error("❌ Saldo insuficiente en tu cuenta de Twilio")
+                    elif "not a valid phone number" in error_str.lower():
+                        logger.error(f"❌ Número de teléfono inválido: {destino}")
+                    else:
+                        logger.error(f"❌ Error al enviar SMS: {error_str}")
+                    
+                    logger.exception(e)  # Log completo del stack trace
+                    return False
+                
+                # Si no es el último intento, hacer reintento con backoff
+                logger.warning(
+                    f"⚠️ Error temporal en intento {intento}/{max_intentos}: {error_str}"
+                )
+                
+                # Esperar antes de reintentar (backoff exponencial)
+                delay = 2 ** intento  # 2s, 4s, 8s
+                logger.info(f"⏳ Esperando {delay}s antes de reintentar...")
+                time.sleep(delay)
+                
+                # Reiniciar el cliente para el siguiente intento
+                self._client = None
+                continue
+        
+        # Si llegamos aquí, todos los intentos fallaron (no debería pasar)
+        return False
     
     def probar_conexion(self) -> bool:
         """
