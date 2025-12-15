@@ -54,13 +54,13 @@ def _generar_mensaje_sms(resultado: Dict[str, Any]) -> str:
     
     # Construir mensaje conciso
     mensaje_partes = [
-        f"🚨 {app_short}: {total_nc} errores NO controlados",
+        f"🚨 {app_short}: {total_nc} UNCONTROLLED errors",
     ]
     
     if sql_count > 0 or otros_count > 0:
-        mensaje_partes.append(f"SQL: {sql_count} | Otros: {otros_count}")
+        mensaje_partes.append(f"SQL: {sql_count} | Others: {otros_count}")
     
-    mensaje_partes.append("Revisar logs urgente")
+    mensaje_partes.append("Check logs immediately")
     
     mensaje = "\n".join(mensaje_partes)
     
@@ -157,4 +157,30 @@ def enviar_sms_errores_no_controlados(resultado: Dict[str, Any]) -> bool:
             f"❌ Error inesperado al enviar SMS para {app_name}: {e}",
             exc_info=True
         )
+        return False
+
+
+def enviar_aviso_sms(mensaje: str) -> bool:
+    """
+    Envía un mensaje SMS genérico.
+    
+    Args:
+        mensaje: El contenido del mensaje a enviar.
+    
+    Returns:
+        bool: True si se envió correctamente, False en caso contrario.
+    """
+    try:
+        cliente = _obtener_cliente_twilio()
+        exito = cliente.enviar_sms(mensaje)
+        
+        if exito:
+            logger.info("✅ Aviso SMS enviado")
+            time.sleep(1) # Pequeña pausa por cortesía/rate limit
+        else:
+            logger.warning("⚠️ No se pudo enviar aviso SMS")
+            
+        return exito
+    except Exception as e:
+        logger.error(f"❌ Error enviando aviso SMS: {e}", exc_info=True)
         return False

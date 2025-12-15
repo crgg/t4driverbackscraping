@@ -146,14 +146,14 @@ def construir_html_resumen(dia: date, app_name: str = "DriverApp GO2", app_key: 
     # "Errores (controlados)" se mantiene el texto (creo, el user dijo "donde dice Errores (controlados), ese subtitulo cambialo a color azul")
     # pero para el primero dijo "donde dice Errores (no controlados), ahora debe decir Errores"
     
-    html_nc = _html_lista_errores('<span style="color: red;">Errores</span>', nc_errors, empty_msg="Sin elementos.")
-    html_c = _html_lista_errores('<span style="color: blue;">Errores (controlados)</span>', c_errors, empty_msg="No existen novedades")
+    html_nc = _html_lista_errores('<span style="color: red;">Errors</span>', nc_errors, empty_msg="No items.")
+    html_c = _html_lista_errores('<span style="color: blue;">Errors (controlled)</span>', c_errors, empty_msg="No updates.")
     
     partes = [
         header,
         html_nc,
         html_c,
-        f'<p>Más detalles: <a href="{url_logs}">{url_logs}</a></p>',
+        f'<p>More details: <a href="{url_logs}">{url_logs}</a></p>',
     ]
 
     return "\n".join(partes), total_nc, total_c
@@ -174,16 +174,16 @@ def _get_subject(app_key: str, dia: date) -> str:
     # broker_goto   -> [BROKER - GO 2 LOGISTICS]
     
     subjects = {
-        "driverapp_goto": f"[DRIVERAPP - GO 2 LOGISTICS] Errores {date_str}",
-        "goexperior": f"[DRIVERAPP - GOEXPERIOR] Errores {date_str}",
-        "accuratecargo": f"[T4APP - ACCURATECARGO] Errores {date_str}",
-        "klc": f"[T4APP - KLC] Errores {date_str}",
-        "broker_goto": f"[BROKER - GO 2 LOGISTICS] Errores {date_str}",
+        "driverapp_goto": f"[DRIVERAPP - GO 2 LOGISTICS] Errors {date_str}",
+        "goexperior": f"[DRIVERAPP - GOEXPERIOR] Errors {date_str}",
+        "accuratecargo": f"[T4APP - ACCURATECARGO] Errors {date_str}",
+        "klc": f"[T4APP - KLC] Errors {date_str}",
+        "broker_goto": f"[BROKER - GO 2 LOGISTICS] Errors {date_str}",
     }
     
     # Fallback genérico si agregamos nuevas apps
     fallback_key = app_key.replace("_", " ").upper()
-    base = subjects.get(app_key, f"[{fallback_key}] Errores {date_str}")
+    base = subjects.get(app_key, f"[{fallback_key}] Errors {date_str}")
     
     return f"🔥 {base}"
 

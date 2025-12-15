@@ -62,7 +62,7 @@ def send_email(subject: str, html_body: str, to_addrs: list[str], sender_name: s
     msg["X-DriverApp-Logs-Token"] = token
     logger.info("SMTP SEND -> to=%s token=%s", to_addrs, token)
 
-    msg.set_content("Revisa la versión en HTML.")
+    msg.set_content("Please view the HTML version.")
     msg.add_alternative(html_body, subtype="html")
 
     with _smtp_client() as s:

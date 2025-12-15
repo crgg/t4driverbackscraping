@@ -2,12 +2,17 @@
 from pathlib import Path
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
+from datetime import datetime, timedelta
 
 from app.config import KEYWORDS_NO_CONTROLADO, get_app_urls
 
 def fetch_logs_html(session, fecha_str: str, app_key: str = "driverapp_goto") -> str:
     """
     Obtiene el HTML de los logs para una fecha dada de una aplicación específica.
+    
+    Si no encuentra logs para la fecha solicitada:
+    - Si es fecha FUTURA: lanza error sin fallback (no tiene sentido buscar logs que no existen)
+    - Si es fecha HOY o PASADA: intenta con el día anterior (útil para ejecuciones a medianoche)
 
     Hace dos pasos:
     1) GET /logs -> lista de archivos (laravel-YYYY-MM-DD.log y sus ?l=...)
@@ -23,39 +28,43 @@ def fetch_logs_html(session, fecha_str: str, app_key: str = "driverapp_goto") ->
 
     soup = BeautifulSoup(index_html, "html.parser")
 
-    # Nombre del archivo estándar
-    target_date_suffix = f"-{fecha_str}.log"
-    strict_target = f"laravel-{fecha_str}.log"
-
-    link_tag = None
-    available_files = []
+    # Intentar con la fecha original primero
+    link_tag, fecha_usada = _buscar_log_por_fecha(soup, fecha_str)
     
-    # Recorremos todos los links para buscar match
-    for a in soup.select("div.list-group a"):
-        text = (a.get_text() or "").strip()
-        available_files.append(text)
-        
-        # 1. Prioridad: Coincidencia exacta
-        if text == strict_target:
-            link_tag = a
-            break
-        
-        # 2. Fallback: Coincidencia parcial por fecha (ej: worker-2025-12-11.log)
-        # Solo si no hemos encontrado uno estricto aún
-        if link_tag is None and text.endswith(target_date_suffix):
-            link_tag = a
-            # No hacemos break inmediato por si luego aparece el estricto, 
-            # pero en este loop simple, si aparece el estricto después, lo sobrescribiría?
-            # Mejor: Si encontramos el estricto, break. Si encontramos parcial, guardamos y seguimos.
-            # Pero para simplificar: si encontramos strict -> break.
-            
-    # Si después del loop tenemos un link_tag (ya sea estricto o parcial), lo usamos.
-    
+    # Si no se encontró, verificar si debemos intentar con el día anterior
     if link_tag is None:
-        # Debug info: imprimir qué archivos había
+        # Obtener fecha actual (sin hora para comparar solo fechas)
+        fecha_hoy = datetime.now().date()
+        fecha_solicitada_obj = datetime.strptime(fecha_str, "%Y-%m-%d").date()
+        
+        # ¿Es fecha futura?
+        if fecha_solicitada_obj > fecha_hoy:
+            # NO usar fallback para fechas futuras
+            available_files = [a.get_text(strip=True) for a in soup.select("div.list-group a")]
+            msg = (
+                f"⚠️ No se puede procesar fecha futura {fecha_str} en {app_key}. "
+                f"La fecha solicitada es posterior a hoy ({fecha_hoy}). "
+                f"Los logs aún no existen. "
+                f"Archivos disponibles: {available_files}"
+            )
+            raise RuntimeError(msg)
+        
+        # Si es fecha HOY o PASADA, intentar con el día anterior
+        fecha_anterior_obj = fecha_solicitada_obj - timedelta(days=1)
+        fecha_anterior_str = fecha_anterior_obj.strftime("%Y-%m-%d")
+        
+        print(f"   ⚠️ No se encontró log para {fecha_str}, intentando con {fecha_anterior_str}...")
+        
+        link_tag, fecha_usada = _buscar_log_por_fecha(soup, fecha_anterior_str)
+        
+        if link_tag is not None:
+            print(f"   ✓ Usando logs del día anterior ({fecha_anterior_str})")
+    
+    # Si después de intentar ambas fechas no hay resultados
+    if link_tag is None:
+        available_files = [a.get_text(strip=True) for a in soup.select("div.list-group a")]
         msg = (
-            f"No se encontró log para {fecha_str} en {app_key}. "
-            f"Buscado: *{target_date_suffix}. "
+            f"No se encontró log para {fecha_str} ni para el día anterior en {app_key}. "
             f"Archivos disponibles: {available_files}"
         )
         raise RuntimeError(msg)
@@ -74,6 +83,37 @@ def fetch_logs_html(session, fecha_str: str, app_key: str = "driverapp_goto") ->
     # debug_path.write_text(logs_html, encoding="utf-8")
 
     return logs_html
+
+
+def _buscar_log_por_fecha(soup: BeautifulSoup, fecha_str: str) -> tuple:
+    """
+    Busca un archivo de log para una fecha específica en el HTML parseado.
+    
+    Returns:
+        tuple: (link_tag, fecha_usada) donde link_tag es el elemento <a> encontrado 
+               (o None si no se encuentra), y fecha_usada es la fecha del log encontrado
+    """
+    # Nombre del archivo estándar
+    target_date_suffix = f"-{fecha_str}.log"
+    strict_target = f"laravel-{fecha_str}.log"
+
+    link_tag = None
+    
+    # Recorremos todos los links para buscar match
+    for a in soup.select("div.list-group a"):
+        text = (a.get_text() or "").strip()
+        
+        # 1. Prioridad: Coincidencia exacta
+        if text == strict_target:
+            link_tag = a
+            break
+        
+        # 2. Fallback: Coincidencia parcial por fecha (ej: worker-2025-12-11.log)
+        # Solo si no hemos encontrado uno estricto aún
+        if link_tag is None and text.endswith(target_date_suffix):
+            link_tag = a
+            
+    return link_tag, fecha_str
 
 def _es_no_controlado(texto: str) -> bool:
     """

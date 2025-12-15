@@ -1,7 +1,7 @@
 # main.py
 import os
 import sys
-from datetime import date
+from datetime import date, datetime
 
 from app.config import APPS_CONFIG
 from db import (
@@ -10,7 +10,7 @@ from db import (
     reset_alerted_errors_for_date,
 )
 from app.scrapper import procesar_aplicacion
-from app.notifier import notificar_app
+from app.notifier import notificar_app, notificar_fecha_futura
 
 
 def resolver_fecha() -> tuple[str, date]:
@@ -50,26 +50,69 @@ def main() -> None:
     # 3) Aplicar resets (si corresponde)
     aplicar_resets(dia, fecha_str)
 
-    print(f"📅 Fecha de reporte: {fecha_str}")
+    # Obtener hora actual de ejecución
+    hora_actual = datetime.now().strftime("%I:%M %p")
+    
+    print(f"📅 Fecha y hora de reporte: {fecha_str} {hora_actual}")
     print(f"📧 Procesando {len(APPS_CONFIG)} aplicaciones...\n")
 
     # 4) Scraping + clasificación + guardado
     resultados = []
+    errores = []  # Rastrear aplicaciones con errores
+    
     for app_key in APPS_CONFIG.keys():
-        resultado = procesar_aplicacion(app_key, fecha_str, dia)
-        resultados.append(resultado)
+        try:
+            resultado = procesar_aplicacion(app_key, fecha_str, dia)
+            resultados.append(resultado)
+        except RuntimeError as e:
+            msg = str(e)
+            if "No se puede procesar fecha futura" in msg:
+                 app_name = APPS_CONFIG.get(app_key, {}).get('name', app_key)
+                 print(f"⚠️ {app_name}: Fecha futura detectada ({fecha_str}). Enviando notificaciones...")
+                 notificar_fecha_futura(app_key, app_name, fecha_str)
+                 # No lo agregamos a 'errores' para no ensuciar el reporte final de errores críticos
+                 continue
+            else:
+                 raise e  # Re-lanzar para que lo capture el Exception genérico
+        except Exception as e:
+            # Registrar el error pero continuar con las demás aplicaciones
+            app_name_error = APPS_CONFIG.get(app_key, {}).get('name', app_key)
+            error_info = {
+                'app_key': app_key,
+                'app_name': app_name_error,
+                'error_type': type(e).__name__,
+                'error_msg': str(e)
+            }
+            errores.append(error_info)
+            print(f"⚠️ Error al procesar {app_name_error}: {type(e).__name__}")
+            print(f"   Continuando con las demás aplicaciones...\n")
 
-    # 5) Envío de correos (notificaciones)
+    # 5) Envío de correos (notificaciones) - solo para aplicaciones exitosas
     for resultado in resultados:
-        notificar_app(resultado)
+        try:
+            notificar_app(resultado)
+        except Exception as e:
+            app_name = resultado.get('app_name', 'Desconocida')
+            print(f"⚠️ Error al notificar {app_name}: {type(e).__name__} - {str(e)}")
 
     print(f"\n{'='*70}")
     print("✅ Scrapping completado para todas las aplicaciones")
     
+    # Mostrar resumen de éxito/errores
+    if resultados:
+        print(f"✓ Aplicaciones procesadas exitosamente: {len(resultados)}/{len(APPS_CONFIG)}")
+    
+    if errores:
+        print(f"\n⚠️ Aplicaciones con errores: {len(errores)}")
+        for error in errores:
+            print(f"   • {error['app_name']}: {error['error_type']}")
+            if 'Connection' in error['error_type'] or 'Timeout' in error['error_type']:
+                print(f"     → Problema de conectividad: {error['error_msg'][:100]}")
+    
     # Mostrar número de destino SMS
     twilio_number = os.getenv("TWILIO_TO_NUMBER")
     if twilio_number:
-        print(f"📱 SMS enviados al número: {twilio_number}")
+        print(f"\n📱 SMS enviados al número: {twilio_number}")
         
     print(f"{'='*70}\n")
 

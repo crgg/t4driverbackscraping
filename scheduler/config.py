@@ -23,6 +23,6 @@ ENV = os.getenv("SCHED_ENV", "test").lower()
 # test  -> cada 1 minuto
 # prod  -> cada 4 horas
 if ENV == "prod":
-    INTERVAL = {"hours": 4}
+    INTERVAL = {"hours": 7}
 else:
     INTERVAL = {"minutes": 1}

@@ -4,6 +4,7 @@ from typing import Dict, Any, List, Optional
 from datetime import date
 
 from .slack_client import SlackClient
+from app.config import get_app_urls
 
 logger = logging.getLogger(__name__)
 
@@ -54,16 +55,16 @@ class SlackMessageFormatter:
             
             # Mensaje simple
             mensaje = (
-                f"🚨 *{app_name}*: {total_nc} errores NO controlados detectados\n"
-                f"SQL: {sql_count} | Otros: {otros_count}\n"
-                f"⚠️ Revisar logs urgente"
+                f"🚨 *{app_name}*: {total_nc} UNCONTROLLED errors detected\n"
+                f"SQL: {sql_count} | Others: {otros_count}\n"
+                f"⚠️ Check logs immediately"
             )
             
             return mensaje
         
         except Exception as e:
             logger.error(f"❌ Error al crear mensaje texto: {e}", exc_info=True)
-            return "🚨 Error crítico detectado - revisar logs"
+            return "🚨 Critical error detected - check logs"
     
     @staticmethod
     def crear_bloques_enriquecidos(resultado: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -79,6 +80,11 @@ class SlackMessageFormatter:
         try:
             app_name = resultado.get("app_name", "App")
             app_key = resultado.get("app_key", "unknown")
+            try:
+                _, _, logs_url = get_app_urls(app_key)
+            except:
+                logs_url = "#" # Fallback
+            
             dia = resultado.get("dia", date.today())
             no_controlados_nuevos = resultado.get("no_controlados_nuevos", [])
             
@@ -94,7 +100,7 @@ class SlackMessageFormatter:
                 "type": "header",
                 "text": {
                     "type": "plain_text",
-                    "text": f"🚨 Errores NO Controlados Detectados",
+                    "text": f"🚨 UNCONTROLLED Errors Detected",
                     "emoji": True
                 }
             })
@@ -105,15 +111,15 @@ class SlackMessageFormatter:
                 "fields": [
                     {
                         "type": "mrkdwn",
-                        "text": f"*Aplicación:*\n{app_name}"
+                        "text": f"*Application:*\n{app_name}"
                     },
                     {
                         "type": "mrkdwn",
-                        "text": f"*Fecha:*\n{dia}"
+                        "text": f"*Date:*\n{dia}"
                     },
                     {
                         "type": "mrkdwn",
-                        "text": f"*Total Errores:*\n{total_nc}"
+                        "text": f"*Total Errors:*\n{total_nc}"
                     },
                     {
                         "type": "mrkdwn",
@@ -131,9 +137,9 @@ class SlackMessageFormatter:
                 "text": {
                     "type": "mrkdwn",
                     "text": (
-                        f"*📊 Categorización:*\n"
-                        f"• Errores SQL: `{sql_count}`\n"
-                        f"• Otros errores: `{otros_count}`"
+                        f"*📊 Categorization:*\n"
+                        f"• SQL Errors: `{sql_count}`\n"
+                        f"• Other errors: `{otros_count}`"
                     )
                 }
             })
@@ -152,7 +158,7 @@ class SlackMessageFormatter:
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*🔍 Muestra de errores:*\n{errores_texto}"
+                        "text": f"*🔍 Error sample:*\n{errores_texto}"
                     }
                 })
                 
@@ -162,7 +168,7 @@ class SlackMessageFormatter:
                         "elements": [
                             {
                                 "type": "mrkdwn",
-                                "text": f"_+ {len(no_controlados_nuevos) - 3} errores más..._"
+                                "text": f"_+ {len(no_controlados_nuevos) - 3} errors more..._"
                             }
                         ]
                     })
@@ -173,7 +179,7 @@ class SlackMessageFormatter:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "⚠️ *Acción requerida:* Revisar logs urgentemente"
+                    "text": f"⚠️ *Action required:* <{logs_url}|Check logs immediately>"
                 }
             })
             
@@ -186,7 +192,7 @@ class SlackMessageFormatter:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "🚨 Error crítico detectado - revisar logs"
+                    "text": "🚨 Critical error detected - check logs"
                 }
             }]
 
@@ -285,6 +291,35 @@ def enviar_slack_errores_no_controlados(resultado: Dict[str, Any]) -> bool:
             f"❌ Error inesperado al enviar notificación de Slack para {app_name}: {e}",
             exc_info=True
         )
+        return False
+
+
+def enviar_aviso_slack(mensaje: str) -> bool:
+    """
+    Envía un mensaje de texto plano a Slack.
+    
+    Args:
+        mensaje: El texto del mensaje.
+        
+    Returns:
+        bool: True si se envió con éxito.
+    """
+    try:
+        cliente = _obtener_cliente_slack()
+        
+        if not cliente.enabled:
+            return False
+            
+        exito = cliente.enviar_mensaje(mensaje)
+        
+        if exito:
+            logger.info("✅ Aviso Slack enviado")
+        else:
+            logger.warning("⚠️ No se pudo enviar aviso Slack")
+            
+        return exito
+    except Exception as e:
+        logger.error(f"❌ Error enviando aviso Slack: {e}", exc_info=True)
         return False
 
 
