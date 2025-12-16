@@ -11,6 +11,8 @@ from db import (
 )
 from app.scrapper import procesar_aplicacion
 from app.notifier import notificar_app, notificar_fecha_futura
+from app.notifier import notificar_app, notificar_fecha_futura
+from app.config import APPS_CONFIG
 
 
 def resolver_fecha() -> tuple[str, date]:
@@ -64,6 +66,7 @@ def main() -> None:
         try:
             resultado = procesar_aplicacion(app_key, fecha_str, dia)
             resultados.append(resultado)
+            
         except RuntimeError as e:
             msg = str(e)
             if "No se puede procesar fecha futura" in msg:

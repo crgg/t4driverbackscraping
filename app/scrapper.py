@@ -47,6 +47,11 @@ def procesar_aplicacion(app_key: str, fecha_str: str, dia: date) -> Dict[str, An
     print(f"  • Errores NO controlados nuevos: {len(no_controlados_nuevos)}")
     print(f"  • Errores NO controlados avisados antes: {len(no_controlados_avisados)}")
 
+    # Metrícas de volumen
+    log_size_kb = len(html.encode('utf-8')) / 1024
+    log_lines = html.count('\n')
+    print(f"  • Volumen de logs: {log_size_kb:.2f} KB ({log_lines} líneas)")
+
     # 3) Guardar SOLO los nuevos
     save_logs(
         controlados_nuevos,

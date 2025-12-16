@@ -79,7 +79,8 @@ def default_recipients(owner_email: str | None = None) -> list[str]:
 
     to_env = os.getenv("ALERT_EMAIL_TO")
     if to_env:
-        return [to_env]
+        # Soporte para múltiples destinatarios separados por coma
+        return [email.strip() for email in to_env.split(',') if email.strip()]
 
     fallback = os.getenv("MAIL_USERNAME")
     return [fallback] if fallback else []

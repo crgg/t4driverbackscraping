@@ -78,7 +78,7 @@ def create_logged_session(app_key: str = "driverapp_goto", max_retries: int = 3)
             elif soup.find("input", {"name": "username"}):
                 field_name = "username"
 
-            print(f"   ℹ️ Campo detectado para login: {field_name}")
+            # print(f"   ℹ️ Campo detectado para login: {field_name}")
 
             payload = {
                 field_name: username,
