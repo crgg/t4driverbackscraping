@@ -56,6 +56,14 @@ APPS_CONFIG: Dict[str, Dict] = {
         "username_env": "BROKER_GOTO_USER",
         "password_env": "BROKER_GOTO_PASS",
     },
+    "klc_crossdock": {
+        "name": "KLC Crossdock T4App",
+        "base_url": "https://klccrossdock.t4app.com",
+        "login_path": "/login",
+        "logs_path": "/logs",
+        "username_env": "KLC_CD_USER",
+        "password_env": "KLC_CD_PASSWORD",
+    },
 }
 
 

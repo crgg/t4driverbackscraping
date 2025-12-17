@@ -137,6 +137,7 @@ def construir_html_resumen(dia: date, app_name: str = "DriverApp GO2", app_key: 
     # Mapping de nombres para el header
     display_names = {
         "driverapp_goto": "Go 2 Logistics",
+        "klc_crossdock": "KLC Crossdock",
     }
     display_name = display_names.get(app_key, app_name)
     
@@ -179,6 +180,7 @@ def _get_subject(app_key: str, dia: date) -> str:
         "accuratecargo": f"[T4APP - ACCURATECARGO] Errors {date_str}",
         "klc": f"[T4APP - KLC] Errors {date_str}",
         "broker_goto": f"[BROKER - GO 2 LOGISTICS] Errors {date_str}",
+        "klc_crossdock": f"[T4APP - KLC CROSSDOCK] Errors {date_str}",
     }
     
     # Fallback genérico si agregamos nuevas apps
@@ -207,7 +209,11 @@ def enviar_resumen_por_correo(dia: date, app_name: str = "DriverApp GO2", app_ke
 
     # Determinar sender_name
     sender_name = "driverapp-logs" # Default
-    if "T4APP" in subject:
+    
+    # Caso especial para KLC Crossdock
+    if app_key == "klc_crossdock":
+        sender_name = "klc-crossdock-logs"
+    elif "T4APP" in subject:
         sender_name = "t4app-logs"
     elif "BROKER" in subject:
         sender_name = "broker-logs"

@@ -53,7 +53,7 @@ def main() -> None:
     aplicar_resets(dia, fecha_str)
 
     # Obtener hora actual de ejecución
-    hora_actual = datetime.now().strftime("%I:%M %p")
+    hora_actual = datetime.now().strftime("%I:%M:%S %p")
     
     print(f"📅 Fecha y hora de reporte: {fecha_str} {hora_actual}")
     print(f"📧 Procesando {len(APPS_CONFIG)} aplicaciones...\n")
