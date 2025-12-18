@@ -1,0 +1,115 @@
+/* Cyber-Dark Theme */
+:root {
+    --bg-dark: #000000;
+    --bg-card: #1c1c1c; /* Anthracite */
+    --input-bg: #f0f0f0;
+    --accent-green: #2ecc71;
+    --text-white: #ffffff;
+    --text-placeholder: #555555;
+    --error-red: #e74c3c;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Arial', sans-serif;
+    background: radial-gradient(circle at center, #2c3e50, var(--bg-dark)); /* Dark radial gradient */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    color: var(--text-white);
+}
+
+.login-container {
+    background-color: var(--bg-card);
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    width: 350px;
+    text-align: center;
+}
+
+.logo-header h2 {
+    margin: 0 0 20px 0;
+    color: var(--text-white);
+    font-size: 24px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: #cccccc;
+}
+
+.form-input {
+    width: 100%; /* Full width */
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    box-sizing: border-box; /* Ensures padding is included in width */
+    background-color: var(--input-bg);
+    color: #333;
+    font-size: 14px;
+}
+
+.form-input::placeholder {
+    color: var(--text-placeholder);
+}
+
+.btn-register, .btn-login {
+    background-color: var(--accent-green);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 12px;
+    width: 100%;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.btn-register:hover, .btn-login:hover {
+    background-color: #27ae60;
+}
+
+.link {
+    display: block;
+    margin-top: 15px;
+    color: #7f8c8d;
+    text-decoration: none;
+    font-size: 12px;
+}
+
+.link:hover {
+    color: var(--accent-green);
+}
+
+/* Status Notifications */
+.status-message {
+    margin-top: 20px;
+    display: none;
+}
+
+.bg-green-success {
+    background-color: var(--accent-green);
+    color: white;
+    padding: 10px;
+    border-radius: 4px;
+    font-weight: bold;
+}
+
+.bg-red-error {
+    background-color: var(--error-red);
+    color: white;
+    padding: 10px;
+    border-radius: 4px;
+    font-weight: bold;
+}

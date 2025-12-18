@@ -64,6 +64,14 @@ APPS_CONFIG: Dict[str, Dict] = {
         "username_env": "KLC_CD_USER",
         "password_env": "KLC_CD_PASSWORD",
     },
+    "t4tms_backend": {
+        "name": "T4TMS - BACKEND",
+        "base_url": "https://backend.t4tms.us",
+        "login_path": "/login",
+        "logs_path": "/logs",
+        "username_env": "T4TMS_BACKEND_USER",
+        "password_env": "T4TMS_BACKEND_PASSWORD",
+    },
 }
 
 

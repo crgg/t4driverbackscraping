@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>T4 Alerts - Register</title>
+    <link rel="stylesheet" href="/registration/style.css">
+    <!-- Import Shared Modules -->
+    <script src="../shared/Logger.js"></script>
+    <script src="../shared/AuthService.js"></script>
+</head>
+
+<body>
+    <div class="login-container">
+        <div class="logo-header">
+            <h2>🚨 T4 Alerts 🚨</h2>
+        </div>
+        <form id="register-form">
+            <div class="form-group">
+                <input type="email" id="email" class="form-input" placeholder="Email Address" required>
+            </div>
+            <div class="form-group">
+                <input type="password" id="password" class="form-input" placeholder="Password" required>
+            </div>
+            <div class="form-group">
+                <input type="password" id="confirm-password" class="form-input" placeholder="Confirm Password" required>
+            </div>
+            <button type="submit" class="btn-register">Register Now!</button>
+        </form>
+
+        <div id="status-message" class="status-message"></div>
+
+        <a href="/login" class="link">Already has an Account? Login!</a>
+    </div>
+
+    <script src="/registration/register-logic.js"></script>
+</body>
+
+</html>

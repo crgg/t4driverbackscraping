@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+"""
+Servidor simple para el frontend con rutas personalizadas.
+Mapea /registration -> frontend_registration/
+Mapea /login -> frontend_login/
+"""
+from flask import Flask, send_from_directory, redirect
+import os
+
+app = Flask(__name__)
+
+# Directorio base del frontend
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+@app.route('/')
+def index():
+    """Redirige a la página de login por defecto"""
+    return redirect('/login')
+
+@app.route('/registration')
+@app.route('/registration/')
+def registration_redirect():
+    """Redirige a la página de registro"""
+    return send_from_directory(os.path.join(BASE_DIR, 'frontend_registration'), 'index.html')
+
+@app.route('/registration/<path:filename>')
+def registration_files(filename):
+    """Sirve archivos estáticos de registration"""
+    return send_from_directory(os.path.join(BASE_DIR, 'frontend_registration'), filename)
+
+@app.route('/login')
+@app.route('/login/')
+def login_redirect():
+    """Redirige a la página de login"""
+    return send_from_directory(os.path.join(BASE_DIR, 'frontend_login'), 'index.html')
+
+@app.route('/login/<path:filename>')
+def login_files(filename):
+    """Sirve archivos estáticos de login"""
+    return send_from_directory(os.path.join(BASE_DIR, 'frontend_login'), filename)
+
+# Sirve archivos compartidos (shared)
+@app.route('/shared/<path:filename>')
+def shared_files(filename):
+    """Sirve archivos compartidos"""
+    return send_from_directory(os.path.join(BASE_DIR, 'shared'), filename)
+
+# Sirve assets
+@app.route('/assets/<path:filename>')
+def assets_files(filename):
+    """Sirve archivos de assets"""
+    return send_from_directory(os.path.join(BASE_DIR, 'assets'), filename)
+
+if __name__ == '__main__':
+    print("🚀 Frontend Server iniciado en http://localhost:8000")
+    print("📝 Registro: http://localhost:8000/registration")
+    print("🔐 Login: http://localhost:8000/login")
+    app.run(host='0.0.0.0', port=8000, debug=True)

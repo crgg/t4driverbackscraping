@@ -181,6 +181,7 @@ def _get_subject(app_key: str, dia: date) -> str:
         "klc": f"[T4APP - KLC] Errors {date_str}",
         "broker_goto": f"[BROKER - GO 2 LOGISTICS] Errors {date_str}",
         "klc_crossdock": f"[T4APP - KLC CROSSDOCK] Errors {date_str}",
+        "t4tms_backend": f"[T4TMS - BACKEND] Errors {date_str}",
     }
     
     # Fallback genérico si agregamos nuevas apps
@@ -210,9 +211,11 @@ def enviar_resumen_por_correo(dia: date, app_name: str = "DriverApp GO2", app_ke
     # Determinar sender_name
     sender_name = "driverapp-logs" # Default
     
-    # Caso especial para KLC Crossdock
+    # Caso especial para KLC Crossdock y T4TMS Backend
     if app_key == "klc_crossdock":
         sender_name = "klc-crossdock-logs"
+    elif app_key == "t4tms_backend":
+        sender_name = "t4tms"
     elif "T4APP" in subject:
         sender_name = "t4app-logs"
     elif "BROKER" in subject:

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>T4 Alerts - Login</title>
+    <link rel="stylesheet" href="/login/style.css">
+    <!-- Import Shared Modules -->
+    <script src="../shared/Logger.js"></script>
+    <script src="../shared/AuthService.js"></script>
+</head>
+
+<body>
+    <div class="login-container">
+        <div class="logo-header">
+            <h2>🚨 T4 Alerts 🚨</h2>
+        </div>
+        <form id="login-form">
+            <div class="form-group">
+                <input type="email" id="email" class="form-input" placeholder="Email Address" required>
+            </div>
+            <div class="form-group">
+                <input type="password" id="password" class="form-input" placeholder="Password" required>
+            </div>
+            <button type="submit" class="btn-login">Log In</button>
+        </form>
+
+        <div id="status-message" class="status-message"></div>
+
+        <a href="/registration" class="link">Don't have an Account? Register!</a>
+    </div>
+
+    <script src="/login/login-logic.js"></script>
+</body>
+
+</html>

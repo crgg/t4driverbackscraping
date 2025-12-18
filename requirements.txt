@@ -5,3 +5,11 @@ psycopg2-binary
 apscheduler
 twilio>=8.0.0
 slack-sdk>=3.0.0
+pyopenssl
+cryptography
+idna
+Flask
+Flask-JWT-Extended
+Flask-SQLAlchemy
+bcrypt
+flask-cors
