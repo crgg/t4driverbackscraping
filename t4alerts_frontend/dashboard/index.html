@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>T4 Alerts - Error Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Load Core Modules -->
+    <script src="../static/js/core/Logger.js"></script>
+    <script src="../static/js/core/Config.js"></script>
+    <script src="../static/js/core/ViewFactory.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <h2>T4<span class="neon-blue">Alerts</span></h2>
+            </div>
+
+            <nav class="nav-menu">
+                <!-- Accordion: Statistics -->
+                <div class="accordion-header" id="accordion-stats" onclick="toggleAccordion('stats-content')">
+                    <span class="icon">📊</span> Statistics
+                    <span style="margin-left: auto; font-size: 0.8em;">▼</span>
+                </div>
+                <div id="stats-content" class="accordion-content">
+                    <div id="apps-list-container">
+                        <!-- Apps injected here dynamically -->
+                        <div class="sub-nav-item">Loading apps...</div>
+                    </div>
+                </div>
+
+                <div class="nav-item" onclick="ViewFactory.navigateTo('certificates')">
+                    <span class="icon">🔒</span> SSL Monitor
+                </div>
+                <div class="nav-item" onclick="ViewFactory.navigateTo('menu')">
+                    <span class="icon">🏠</span> Main Menu
+                </div>
+            </nav>
+
+            <div class="user-profile">
+                <div class="avatar">Admin</div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-bar">
+                <h1 id="page-title">Dashboard Overview</h1>
+                <div class="date-display" id="current-date">Loading date...</div>
+            </header>
+
+            <div id="loading" class="loading" style="display: none;">Fetching data...</div>
+
+            <!-- Stats/Logs View Container -->
+            <div id="app-view-container" style="display: none;">
+
+                <div class="date-selector">
+                    <label>Select Date:</label>
+                    <input type="date" id="stats-date-picker">
+                </div>
+
+                <div class="tabs-container">
+                    <button class="tab-btn active" onclick="switchTab('logs')">LOGS</button>
+                    <button class="tab-btn" onclick="switchTab('stats')">STATS</button>
+                </div>
+
+                <!-- View: LOGS -->
+                <div id="view-logs" class="logs-section">
+                    <div class="log-group">
+                        <h3>Errors</h3>
+                        <div id="logs-uncontrolled" class="log-list">
+                            <!-- Injected -->
+                        </div>
+                    </div>
+                    <div class="log-group controlled">
+                        <h3>Errors (controlled)</h3>
+                        <div id="logs-controlled" class="log-list">
+                            <!-- Injected -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- View: STATS -->
+                <div id="view-stats" class="stats-view" style="display: none;">
+                    <div class="chart-card large">
+                        <h3>SQL vs Non-SQL Errors</h3>
+                        <div class="canvas-container">
+                            <canvas id="sqlChart"></canvas>
+                        </div>
+                    </div>
+                    <!-- Placeholder for other stats or maybe re-use donut -->
+                </div>
+            </div>
+
+            <!-- Placeholder for initial Dashboard Overview (if we want to keep it) -->
+            <div id="dashboard-overview" class="charts-grid" style="display: none;">
+                <!-- Bar Chart: Errors per App -->
+                <div class="chart-card large">
+                    <h3>Uncontrolled Errors per App</h3>
+                    <div class="canvas-container">
+                        <canvas id="barChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Donut Chart: Error Types -->
+                <div class="chart-card small">
+                    <h3>Error Distribution</h3>
+                    <div class="canvas-container">
+                        <canvas id="donutChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notifications Feed (Keep on Overview) -->
+            <div class="notifications-section" id="feed-container" style="display: none;">
+                <h3>Recent Alerts Feed</h3>
+                <div class="feed-header">
+                    <span>App</span>
+                    <span>Signature</span>
+                    <span>Last Seen</span>
+                    <span>Recurrence</span>
+                </div>
+                <div id="feed-list" class="feed-list">
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

@@ -3,8 +3,19 @@ from pathlib import Path
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
+import re
 
 from app.config import KEYWORDS_NO_CONTROLADO, get_app_urls
+
+
+class StaleLogsError(Exception):
+    """Exception raised when log files haven't been updated for 2+ days."""
+    def __init__(self, message, app_key, fecha_str, days_old, most_recent_date):
+        super().__init__(message)
+        self.app_key = app_key
+        self.fecha_str = fecha_str
+        self.days_old = days_old
+        self.most_recent_date = most_recent_date
 
 def fetch_logs_html(session, fecha_str: str, app_key: str = "driverapp_goto") -> str:
     """
@@ -63,11 +74,25 @@ def fetch_logs_html(session, fecha_str: str, app_key: str = "driverapp_goto") ->
     # Si después de intentar ambas fechas no hay resultados
     if link_tag is None:
         available_files = [a.get_text(strip=True) for a in soup.select("div.list-group a")]
-        msg = (
-            f"No se encontró log para {fecha_str} ni para el día anterior en {app_key}. "
-            f"Archivos disponibles: {available_files}"
-        )
-        raise RuntimeError(msg)
+        
+        # Verificar si los logs están desactualizados (2+ días)
+        most_recent_date, days_old = _get_most_recent_log_date(soup)
+        
+        if most_recent_date and days_old >= 2:
+            # Los logs están desactualizados por 2 o más días
+            msg = (
+                f"WARNING: Log files have not been created for two or more days in {app_key}. "
+                f"Most recent log: {most_recent_date} ({days_old} days old). "
+                f"Requested: {fecha_str}. Available files: {available_files}"
+            )
+            raise StaleLogsError(msg, app_key, fecha_str, days_old, most_recent_date)
+        else:
+            # Error normal - logs no encontrados pero están relativamente actuales
+            msg = (
+                f"No se encontró log para {fecha_str} ni para el día anterior en {app_key}. "
+                f"Archivos disponibles: {available_files}"
+            )
+            raise RuntimeError(msg)
 
     # href viene en formato "?l=eyJpdiI6..."
     href = link_tag.get("href") or ""
@@ -83,6 +108,39 @@ def fetch_logs_html(session, fecha_str: str, app_key: str = "driverapp_goto") ->
     # debug_path.write_text(logs_html, encoding="utf-8")
 
     return logs_html
+
+
+def _get_most_recent_log_date(soup: BeautifulSoup) -> tuple:
+    """
+    Extrae las fechas de todos los archivos de log disponibles y devuelve la más reciente.
+    
+    Returns:
+        tuple: (most_recent_date, days_old) donde most_recent_date es un objeto date
+               y days_old es el número de días desde hoy hasta esa fecha (positivo = pasado)
+               Devuelve (None, None) si no se encuentran archivos de log con fechas válidas.
+    """
+    # Pattern para extraer fechas YYYY-MM-DD de nombres de archivo
+    date_pattern = re.compile(r'(\d{4}-\d{2}-\d{2})\.log')
+    
+    log_dates = []
+    for a in soup.select("div.list-group a"):
+        text = (a.get_text() or "").strip()
+        match = date_pattern.search(text)
+        if match:
+            try:
+                log_date = datetime.strptime(match.group(1), "%Y-%m-%d").date()
+                log_dates.append(log_date)
+            except ValueError:
+                continue
+    
+    if not log_dates:
+        return None, None
+    
+    most_recent = max(log_dates)
+    today = datetime.now().date()
+    days_old = (today - most_recent).days
+    
+    return most_recent, days_old
 
 
 def _buscar_log_por_fecha(soup: BeautifulSoup, fecha_str: str) -> tuple:

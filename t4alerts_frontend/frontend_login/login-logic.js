@@ -19,8 +19,8 @@ class LoginManager {
             await this.authService.login(email, password);
             this.showStatus("SUCCESSFUL AUTHENTICATION", "success");
 
-            // Here you would typically redirect to the dashboard
-            // window.location.href = "../dashboard/index.html"; 
+            // Redirect to the new menu
+            window.location.href = "/menu";
         } catch (error) {
             this.showStatus("❌ FAILED AUTHENTICATION ❌", "error");
         }

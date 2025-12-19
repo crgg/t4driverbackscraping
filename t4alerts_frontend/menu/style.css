@@ -1,0 +1,85 @@
+/* Reseteo para evitar el fondo blanco */
+body,
+html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, #444 0%, #000 100%);
+    /* Gradiente de la imagen */
+    color: white;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.menu-container {
+    text-align: center;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+header h1 {
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+    letter-spacing: 2px;
+}
+
+.neon-text {
+    color: #00f3ff;
+    text-shadow: 0 0 10px #00f3ff, 0 0 20px #00f3ff;
+}
+
+header p {
+    color: #888;
+    margin-bottom: 3rem;
+}
+
+.options-wrapper {
+    display: flex;
+    gap: 50px;
+    margin-top: 30px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.menu-card {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 40px;
+    border-radius: 15px;
+    cursor: pointer;
+    transition: transform 0.3s, border 0.3s;
+    border: 1px solid transparent;
+    width: 250px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.menu-card:hover {
+    transform: translateY(-10px);
+    border: 1px solid #2ecc71;
+    /* Brillo verde al pasar el mouse */
+    box-shadow: 0 0 20px rgba(46, 204, 113, 0.2);
+}
+
+.siren-icon {
+    font-size: 3rem;
+    display: block;
+    margin-bottom: 10px;
+}
+
+.menu-card h2 {
+    margin: 10px 0;
+    font-size: 1.5rem;
+}
+
+.menu-card p {
+    font-size: 0.9rem;
+    color: #aaa;
+    margin: 0;
+}

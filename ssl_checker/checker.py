@@ -76,11 +76,22 @@ class SSLChecker:
         except Exception as e:
             return "Unknown Issuer"
 
-    def process_domain(self, hostname):
+    def check_domain(self, hostname):
+        """
+        Checks SSL status for a domain and returns a dictionary with the results.
+        Does NOT send alerts.
+        """
         logger.info(f"Checking SSL for {hostname}...")
         hostinfo = self.get_certificate(hostname)
         if not hostinfo:
-            return
+            return {
+                "hostname": hostname,
+                "status": "ERROR",
+                "days_left": 0,
+                "expires": "Unknown",
+                "issuer": "Unknown",
+                "color": "gray"
+            }
 
         try:
             notafter_dt = hostinfo.cert.not_valid_after_utc
@@ -102,11 +113,54 @@ class SSLChecker:
             else:
                 severity = "OK"
                 color = "green"
-
-            self.send_alert(hostname, days_left, not_after_str, issuer, severity, color)
+            
+            return {
+                "hostname": hostname,
+                "status": severity,
+                "days_left": days_left,
+                "expires": not_after_str,
+                "issuer": issuer,
+                "color": color
+            }
 
         except Exception as e:
             logger.error(f"Error processing domain {hostname}: {e}")
+            return {
+                "hostname": hostname,
+                "status": "ERROR",
+                "error": str(e),
+                "days_left": 0,
+                "expires": "Unknown",
+                "issuer": "Unknown",
+                "color": "red"
+            }
+
+    def process_domain(self, hostname):
+        """
+        Original method (kept for backward compatibility).
+        Checks domain and sends alerts if needed.
+        """
+        result = self.check_domain(hostname)
+        
+        # If there was a connection error (status ERROR without valid data), skip alerting or handle differently
+        if result["status"] == "ERROR" and result["expires"] == "Unknown":
+            return
+
+        # Check conditions for alerting
+        # process_domain logic was: send alert if days_left < umbral? 
+        # Actually in original code it sent alert ALWAYS (see send_alert call in original code line 106)
+        # Wait, line 106 sent alert regardless of days_left.
+        # But let's check if the user wanted alerts only on threshold.
+        # The original code sent it always. I will accept that behavior.
+        
+        self.send_alert(
+            hostname, 
+            result["days_left"], 
+            result["expires"], 
+            result["issuer"], 
+            result["status"], 
+            result["color"]
+        )
 
     def send_alert(self, hostname, days_left, expiration_str, issuer, severity, color):
         try:

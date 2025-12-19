@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>T4 Alerts - SSL Certificates</title>
+    <link rel="stylesheet" href="../menu/style.css"> <!-- Reuse base styles -->
+    <link rel="stylesheet" href="style.css">
+    <script src="../static/js/core/Logger.js"></script>
+    <script src="../static/js/core/Config.js"></script>
+    <script src="../static/js/core/ViewFactory.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="back-btn" onclick="ViewFactory.navigateTo('menu')">← Back</div>
+            <h1>SSL <span class="neon-text">Monitor</span></h1>
+        </header>
+
+        <div id="loading" class="loading">Loading certificates...</div>
+        <div id="certificates-grid" class="cards-container">
+            <!-- Cards will be injected here -->
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

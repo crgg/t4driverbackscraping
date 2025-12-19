@@ -10,8 +10,8 @@ from db import (
     reset_alerted_errors_for_date,
 )
 from app.scrapper import procesar_aplicacion
-from app.notifier import notificar_app, notificar_fecha_futura
-from app.notifier import notificar_app, notificar_fecha_futura
+from app.notifier import notificar_app, notificar_fecha_futura, notificar_logs_desactualizados
+from app.logs_scraper import StaleLogsError
 from app.config import APPS_CONFIG
 
 
@@ -77,6 +77,25 @@ def main() -> None:
                  continue
             else:
                  raise e  # Re-lanzar para que lo capture el Exception genérico
+        
+        except StaleLogsError as e:
+            # Logs desactualizados (2+ días sin actualizar)
+            app_name_stale = APPS_CONFIG.get(app_key, {}).get('name', app_key)
+            print(f"🚨 {app_name_stale}: STALE LOGS - {e.days_old} days old (most recent: {e.most_recent_date})")
+            print(f"   Enviando alertas de peligro y continuando con las demás aplicaciones...")
+            
+            # Enviar notificaciones de peligro
+            notificar_logs_desactualizados(
+                app_key=e.app_key,
+                app_name=app_name_stale,
+                fecha_str=e.fecha_str,
+                days_old=e.days_old,
+                most_recent_date=str(e.most_recent_date)
+            )
+            
+            # No agregamos a 'errores' porque las notificaciones ya se enviaron
+            continue
+            
         except Exception as e:
             # Registrar el error pero continuar con las demás aplicaciones
             app_name_error = APPS_CONFIG.get(app_key, {}).get('name', app_key)

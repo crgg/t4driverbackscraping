@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 import time
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from requests.auth import HTTPBasicAuth
 
 from .config import get_app_credentials, get_app_urls
 
@@ -11,6 +12,9 @@ from .config import get_app_credentials, get_app_urls
 def create_logged_session(app_key: str = "driverapp_goto", max_retries: int = 3) -> requests.Session:
     """
     Crea una sesión autenticada para una aplicación específica con retry logic.
+    
+    T4TMS Backend uses HTTP Basic Auth directly on /logs endpoint.
+    Other apps use traditional form-based login.
     
     Args:
         app_key: clave de la aplicación en APPS_CONFIG (default: 'driverapp_goto')
@@ -24,11 +28,84 @@ def create_logged_session(app_key: str = "driverapp_goto", max_retries: int = 3)
         requests.exceptions.ConnectionError: si no se puede establecer conexión
         requests.exceptions.Timeout: si la conexión excede el timeout
     """
-    # Obtener credenciales y URLs
+    # T4TMS uses HTTP Basic Auth, not form-based login
+    if app_key == "t4tms_backend":
+        return _create_basic_auth_session(app_key, max_retries)
+    else:
+        return _create_form_login_session(app_key, max_retries)
+
+
+def _create_basic_auth_session(app_key: str, max_retries: int = 3) -> requests.Session:
+    """
+    Creates a session with HTTP Basic Authentication for T4TMS backend.
+    Authentication happens directly on the /logs endpoint.
+    """
+    app_name, username, password = get_app_credentials(app_key)
+    base_url, _, logs_url = get_app_urls(app_key)
+    
+    print(f"🔐 Autenticando en {app_name} ({base_url}) con HTTP Basic Auth...")
+    
+    session = requests.Session()
+    
+    # Configure HTTP Basic Auth for all requests
+    session.auth = HTTPBasicAuth(username, password)
+    
+    # Configure retry strategy
+    retry_strategy = Retry(
+        total=2,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["HEAD", "GET", "POST", "PUT", "DELETE", "OPTIONS", "TRACE"]
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    
+    # Test authentication by accessing /logs
+    TIMEOUT = (10, 30)
+    last_exception = None
+    retry_delays = [5, 10, 20]
+    
+    for attempt in range(max_retries):
+        try:
+            resp = session.get(logs_url, timeout=TIMEOUT)
+            
+            if resp.status_code == 401:
+                raise RuntimeError(f"❌ Autenticación falló en {app_name}: credenciales inválidas")
+            
+            resp.raise_for_status()
+            print(f"✅ Autenticación exitosa en {app_name}")
+            return session
+            
+        except (requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout,
+                requests.exceptions.RequestException) as e:
+            last_exception = e
+            
+            if attempt < max_retries - 1:
+                wait_time = retry_delays[attempt]
+                print(f"   ⚠️ Intento {attempt + 1}/{max_retries} falló: {type(e).__name__}")
+                print(f"   ⏳ Reintentando en {wait_time} segundos...")
+                time.sleep(wait_time)
+            else:
+                error_msg = f"❌ Error de conexión en {app_name} después de {max_retries} intentos: {str(e)}"
+                print(f"   {error_msg}")
+                raise requests.exceptions.ConnectionError(error_msg) from e
+    
+    raise requests.exceptions.ConnectionError(
+        f"No se pudo conectar a {app_name} después de {max_retries} intentos"
+    ) from last_exception
+
+
+def _create_form_login_session(app_key: str, max_retries: int = 3) -> requests.Session:
+    """
+    Creates a session with traditional form-based login.
+    Used for most applications (GoTo, GoExperior, KLC, etc.)
+    """
     app_name, username, password = get_app_credentials(app_key)
     base_url, login_url, logs_url = get_app_urls(app_key)
     
-    print(f"🔐 Autenticando en {app_name} ({base_url})...")
+    print(f"🔐 Autenticando en {app_name} ({base_url}) con formulario de login...")
     
     # Configuración de timeouts
     # (connect_timeout, read_timeout) en segundos

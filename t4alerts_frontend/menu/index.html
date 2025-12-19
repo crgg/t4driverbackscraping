@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>T4 Alerts - Menu Hub</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Load Core Modules -->
+    <!-- Using type="module" to support ES6 imports/exports if needed, but keeping global for compatibility with existing flow -->
+    <script src="../shared/Logger.js"></script>
+    <script src="../static/js/core/Config.js"></script>
+    <script src="../static/js/core/ViewFactory.js"></script>
+</head>
+
+<body>
+    <div class="menu-container">
+        <header>
+            <h1>🚨 T4 Alerts 🚨</h1>
+            <p>Select a module to monitor</p>
+        </header>
+
+        <div class="options-wrapper">
+            <div class="menu-card" onclick="ViewFactory.navigateTo('certificates')">
+                <span class="siren-icon">🚨</span>
+                <h2>SSL Certificates</h2>
+                <p>Monitor SSL expiration dates</p>
+            </div>
+
+            <div class="menu-card" onclick="ViewFactory.navigateTo('errors')">
+                <span class="siren-icon">🚨</span>
+                <h2>Error Dashboard</h2>
+                <p>Real-time statistics of errors</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

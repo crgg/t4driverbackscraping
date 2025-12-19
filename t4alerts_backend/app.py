@@ -5,6 +5,11 @@ import os
 # even when running this script directly from the subdirectory.
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from dotenv import load_dotenv
+# Load environment variables from the root .env file
+root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(os.path.join(root_dir, '.env'))
+
 from flask import Flask
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
@@ -20,11 +25,25 @@ def create_app():
     # Initialize Extensions
     db.init_app(app)
     jwt = JWTManager(app)
-    CORS(app) # Enable CORS for all domains
+    # CORS Configuration
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
 
+    # Register Blueprints
     # Register Blueprints
     app.register_blueprint(registration_bp, url_prefix='/api/auth')
     app.register_blueprint(login_bp, url_prefix='/api/auth')
+    
+    # New V2.0 Blueprints
+    from t4alerts_backend.menu import menu_bp
+    from t4alerts_backend.certificates import certificates_bp
+    from t4alerts_backend.dashboard import dashboard_bp
+    
+    app.register_blueprint(menu_bp, url_prefix='/api/menu')
+    app.register_blueprint(certificates_bp, url_prefix='/api/certificates')
+    app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
+    
+    from t4alerts_backend.stats import stats_bp
+    app.register_blueprint(stats_bp, url_prefix='/api/stats')
 
     # Create Tables within Context
     with app.app_context():

@@ -39,6 +39,50 @@ def login_files(filename):
     """Sirve archivos estáticos de login"""
     return send_from_directory(os.path.join(BASE_DIR, 'frontend_login'), filename)
 
+# --- Nuevas Rutas v2.0 ---
+
+@app.route('/menu')
+def menu_redirect():
+    return redirect('/menu/')
+
+@app.route('/menu/')
+def menu_index():
+    return send_from_directory(os.path.join(BASE_DIR, 'menu'), 'index.html')
+
+@app.route('/menu/<path:filename>')
+def menu_files(filename):
+    # Ensure we serve files from the menu directory
+    return send_from_directory(os.path.join(BASE_DIR, 'menu'), filename)
+
+@app.route('/certificates')
+def certificates_redirect():
+    return redirect('/certificates/')
+
+@app.route('/certificates/')
+def certificates_index():
+    return send_from_directory(os.path.join(BASE_DIR, 'certificates'), 'index.html')
+
+@app.route('/certificates/<path:filename>')
+def certificates_files(filename):
+    return send_from_directory(os.path.join(BASE_DIR, 'certificates'), filename)
+
+@app.route('/errors')
+def errors_redirect():
+    return redirect('/errors/')
+
+@app.route('/errors/')
+def errors_index():
+    return send_from_directory(os.path.join(BASE_DIR, 'dashboard'), 'index.html')
+
+@app.route('/errors/<path:filename>')
+def errors_files(filename):
+    return send_from_directory(os.path.join(BASE_DIR, 'dashboard'), filename)
+
+# Sirve archivos estáticos globales (static/js/core, etc)
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    return send_from_directory(os.path.join(BASE_DIR, 'static'), filename)
+
 # Sirve archivos compartidos (shared)
 @app.route('/shared/<path:filename>')
 def shared_files(filename):
