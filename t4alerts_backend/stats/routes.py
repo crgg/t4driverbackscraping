@@ -1,9 +1,16 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
-from app.config import APPS_CONFIG
-from db.connection import get_cursor
-import logging
+import sys
+import os
+from pathlib import Path
 from datetime import datetime
+import logging
+
+# Add parent directory to path to import from root project modules
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from app.config import APPS_CONFIG
+# Note: app.scrapper is imported on-demand in get_app_stats_logic to avoid circular imports
 
 stats_bp = Blueprint('stats', __name__)
 logger = logging.getLogger(__name__)
@@ -42,124 +49,341 @@ def debug_apps():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+# Debug endpoint for stats view (no auth) for testing
+@stats_bp.route('/debug/view/<app_key>', methods=['GET'])
+def debug_stats_view(app_key):
+    """Debug endpoint without JWT to test stats functionality."""
+    return get_app_stats_logic(app_key, request.args.get('date', datetime.now().strftime('%Y-%m-%d')))
+
+
 @stats_bp.route('/view/<app_key>', methods=['GET'])
 @jwt_required()
 def get_app_stats(app_key):
     """
     Returns logs and statistics for a specific app and date.
+    Reads from log files in salida_logs/ directory.
     Query Params: ?date=YYYY-MM-DD (default: today)
     """
     date_str = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+    return get_app_stats_logic(app_key, date_str)
+
+
+def get_app_stats_logic(app_key, date_str):
+    """
+    Core logic for fetching app stats via REAL-TIME SCRAPING.
+    FALLBACK: If scraping fails (connection error), reads from .log files as backup.
     
-    response_data = {
-        "logs": {
-            "uncontrolled": [],
-            "controlled": []
-        },
-        "stats": {
-            "sql_errors": 0,
-            "non_sql_errors": 0
-        }
-    }
-
+    This provides best of both worlds:
+    - Real-time data when servers are accessible
+    - Cached data when servers are down or unreachable
+    """
     try:
-        if app_key not in APPS_CONFIG:
-            return jsonify({"error": "App not found"}), 404
+        # Convert date string to date object
+        dia = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+    
+    if app_key not in APPS_CONFIG:
+        return jsonify({"error": "App not found"}), 404
 
-        with get_cursor() as cur:
-            # Fetch errors for the specific date and app
-            # Note: casting first_seen_at to date to filter
-            query = """
-                SELECT 
-                    tipo, 
-                    signature, 
-                    first_seen_at, 
-                    created_at 
-                FROM alerted_errors 
-                WHERE app_key = %s 
-                AND DATE(first_seen_at) = %s
-                ORDER BY first_seen_at DESC
-            """
-            cur.execute(query, (app_key, date_str))
-            rows = cur.fetchall()
-
-            # Process rows
-            uncontrolled_logs = []
-            controlled_logs = []
+    # Try real-time scraping first
+    try:
+        logger.info(f"🔄 Starting REAL-TIME SCRAPING for {app_key} on {date_str}")
+        
+        from app.scrapper import procesar_aplicacion
+        
+        resultado = procesar_aplicacion(app_key, date_str, dia)
+        
+        logger.info(f"  ✓ Scraping completed for {app_key}")
+        
+        # DETAILED LOGGING - Show breakdown of new vs alerted
+        logger.info(f"📊 DETAILED BREAKDOWN for {app_key} on {date_str}:")
+        logger.info(f"  Controlled errors:")
+        logger.info(f"    - Nuevos (new): {len(resultado['controlados_nuevos'])}")
+        logger.info(f"    - Avisados (already alerted): {len(resultado['controlados_avisados'])}")
+        logger.info(f"    - TOTAL: {len(resultado['controlados_nuevos']) + len(resultado['controlados_avisados'])}")
+        logger.info(f"  Uncontrolled errors:")
+        logger.info(f"    - Nuevos (new): {len(resultado['no_controlados_nuevos'])}")
+        logger.info(f"    - Avisados (already alerted): {len(resultado['no_controlados_avisados'])}")
+        logger.info(f"    - TOTAL: {len(resultado['no_controlados_nuevos']) + len(resultado['no_controlados_avisados'])}")
+        
+        # Get ALL errors (new + previously alerted)
+        controlados_all = resultado['controlados_nuevos'] + resultado['controlados_avisados']
+        no_controlados_all = resultado['no_controlados_nuevos'] + resultado['no_controlados_avisados']
+        
+        # Convert strings to dict format for aggregation
+        # Each error line is a string, but agregar_errores_por_firma expects dicts with 'firma' field
+        from app.signatures import build_signature
+        
+        def convert_to_dict_format(error_lines, dia):
+            """Convert list of error strings to list of dicts with firma field"""
+            result = []
+            for line in error_lines:
+                firma = build_signature(line)
+                result.append({
+                    'firma': firma,
+                    'timestamp': datetime.combine(dia, datetime.min.time())
+                })
+            return result
+        
+        controlados_dict = convert_to_dict_format(controlados_all, dia)
+        no_controlados_dict = convert_to_dict_format(no_controlados_all, dia)
+        
+        # Aggregate by signature
+        nc_aggregated = agregar_errores_por_firma(no_controlados_dict, dia)
+        c_aggregated = agregar_errores_por_firma(controlados_dict, dia)
+        
+        logger.info(f"  • Unique NC signatures: {len(nc_aggregated)}")
+        logger.info(f"  • Unique C signatures: {len(c_aggregated)}")
+        
+        # Format for frontend
+        uncontrolled_logs = format_errors_for_frontend(nc_aggregated)
+        controlled_logs = format_errors_for_frontend(c_aggregated)
+        
+        # Calculate SQL stats
+        sql_count = 0
+        non_sql_count = 0
+        
+        for err in nc_aggregated:
+            if es_error_sql(err['firma']):
+                sql_count += err['count']
+            else:
+                non_sql_count += err['count']
+        
+        logger.info(f"  • SQL errors: {sql_count}, Non-SQL: {non_sql_count}")
+        
+        # Extract SQLSTATE distribution for bar chart
+        sqlstate_dist = extract_sqlstate_distribution(nc_aggregated)
+        logger.info(f"  • SQLSTATE distribution: {len(sqlstate_dist)} unique codes")
+        
+        response_data = {
+            "logs": {
+                "uncontrolled": uncontrolled_logs,
+                "controlled": controlled_logs
+            },
+            "stats": {
+                "sqlstate_distribution": sqlstate_dist,
+                "sql_errors": sql_count,  # Keep for backward compatibility
+                "non_sql_errors": non_sql_count
+            },
+            "source": "real-time-scraping"
+        }
+        
+        # FINAL LOG - What we're actually sending to frontend
+        logger.info(f"📤 SENDING TO FRONTEND:")
+        logger.info(f"  - Uncontrolled logs: {len(uncontrolled_logs)} unique signatures")
+        logger.info(f"  - Controlled logs: {len(controlled_logs)} unique signatures")
+        logger.info(f"  - SQL errors: {sql_count}, Non-SQL: {non_sql_count}")
+        logger.info(f"  - SQLSTATE codes: {[s['sqlstate'] for s in sqlstate_dist]}")
+        
+        return jsonify(response_data), 200
+        
+    except Exception as scraping_error:
+        # FALLBACK: If scraping fails, try to read from .log files
+        logger.warning(f"⚠️ Scraping failed for {app_key}, trying fallback to .log files...")
+        logger.warning(f"   Error was: {str(scraping_error)[:200]}")
+        
+        try:
+            # Calculate project root and try reading from files
+            project_root = Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+            LOG_DIR = project_root / "salida_logs"
+            
+            # Add app_key suffix
+            no_controlados_path = LOG_DIR / f"errores_no_controlados_{app_key}.log"
+            controlados_path = LOG_DIR / f"errores_controlados_{app_key}.log"
+            
+            logger.info(f"  📂 Trying to read from: {no_controlados_path.name}")
+            
+            # Import the file-reading function
+            from app.log_stats import get_daily_errors
+            
+            # Get errors for the day
+            nc_errors = get_daily_errors(no_controlados_path, dia)
+            c_errors = get_daily_errors(controlados_path, dia)
+            
+            logger.info(f"  ✓ Fallback successful - found {len(nc_errors)} NC, {len(c_errors)} C from files")
+            
+            # Format for frontend (same as scraping path)
+            def format_errors(errors):
+                formatted = []
+                for err in errors:
+                    formatted.append({
+                        "timestamp": err["first_time"].strftime('%Y-%m-%d %H:%M:%S'),
+                        "message": err["firma"],
+                        "count": err["count"]
+                    })
+                return formatted
+            
+            uncontrolled_logs = format_errors(nc_errors)
+            controlled_logs = format_errors(c_errors)
+            
+            # Calculate SQL stats
             sql_count = 0
             non_sql_count = 0
-
-            # Temporary frequency map for this view (or we can just list them all)
-            # The user asked for "xN" recurrence. 
-            # If we are listing individual rows, recurrence might be 1 unless we aggregate.
-            # The PRD example showed: "2025-12-19 ... message ... (x1)"
-            # Since the table alerted_errors stores one row per error occurrence (usually),
-            # or creates a new row. Wait, scraper logic usually inserts every time or updates?
-            # Let's assume we group by signature for the view to calculate (xN).
             
-            # Let's do aggregation in python for flexibility or SQL.
-            # Grouping by signature + time slice might be complex if we want chronological order.
-            # User example: "Message (x1)". 
-            # Let's just aggregate by signature for the "stats" charts, 
-            # but for "Logs" view, usually users want to see the sequence.
-            # HOWEVER, the User example explicitly shows `(x1)` at the end.
-            # I will group by signature + approximate time or just group by signature entirely for the day?
-            # "2025-12-19 09:39:10 ... Message ... (x1)" implies a timestamp.
-            # If it happened 5 times, showing one timestamp is ambiguous unless it's "Last Seen".
-            # Let's group by signature and show MAX(timestamp) and Count.
-
-            # Re-querying with Group By to match the requested format
-            group_query = """
-                SELECT 
-                    tipo,
-                    signature,
-                    MAX(first_seen_at) as last_seen,
-                    COUNT(*) as count
-                FROM alerted_errors
-                WHERE app_key = %s
-                AND DATE(first_seen_at) = %s
-                GROUP BY tipo, signature
-                ORDER BY last_seen DESC
-            """
+            for err in nc_errors:
+                if es_error_sql(err["firma"]):
+                    sql_count += err["count"]
+                else:
+                    non_sql_count += err["count"]
             
-            cur.execute(group_query, (app_key, date_str))
-            grouped_rows = cur.fetchall()
-
-            for row in grouped_rows:
-                tipo, signature, last_seen, count = row
-                
-                # Format: YYYY-MM-DD HH:MM:SS — Message (xN)
-                formatted_log = {
-                    "timestamp": last_seen.strftime('%Y-%m-%d %H:%M:%S') if last_seen else "N/A",
-                    "message": signature,
-                    "count": count,
-                    "full_text": f"{last_seen.strftime('%Y-%m-%d %H:%M:%S')} — {signature} (x{count})"
-                }
-
-                if tipo == 'no_controlado':
-                    uncontrolled_logs.append(formatted_log)
-                    
-                    # Check for SQL error keywords
-                    # Simple heuristic: "SQLSTATE", "SQL", "DB2", "ORA-", "Postgres"
-                    sig_upper = signature.upper()
-                    if "SQL" in sig_upper or "DB2" in sig_upper or "ORA-" in sig_upper or "CONSTRAINT" in sig_upper:
-                        sql_count += count
-                    else:
-                        non_sql_count += count
-                        
-                elif tipo == 'controlado':
-                    controlled_logs.append(formatted_log)
-                    # Controlled errors usually not counted in SQL/Non-SQL stats chart unless specified.
-                    # User said: "grafico de distribucion de errores SQL y otro de errores NO sql"
-                    # typically refers to the crash/uncontrolled ones. I'll stick to that for now.
-
-            response_data["logs"]["uncontrolled"] = uncontrolled_logs
-            response_data["logs"]["controlled"] = controlled_logs
-            response_data["stats"]["sql_errors"] = sql_count
-            response_data["stats"]["non_sql_errors"] = non_sql_count
+            response_data = {
+                "logs": {
+                    "uncontrolled": uncontrolled_logs,
+                    "controlled": controlled_logs
+                },
+                "stats": {
+                    "sql_errors": sql_count,
+                    "non_sql_errors": non_sql_count
+                },
+                "source": "cached-files",
+                "note": f"Real-time scraping failed, showing cached data from {date_str}"
+            }
             
-        return jsonify(response_data), 200
+            return jsonify(response_data), 200
+            
+        except Exception as fallback_error:
+            # Both scraping AND file reading failed
+            logger.error(f"❌ Both scraping and fallback failed for {app_key}")
+            logger.error(f"   Scraping error: {str(scraping_error)[:100]}")
+            logger.error(f"   Fallback error: {str(fallback_error)[:100]}")
+            
+            return jsonify({
+                "error": f"Unable to fetch stats", 
+                "details": {
+                    "scraping_failed": str(scraping_error)[:200],
+                    "cache_failed": str(fallback_error)[:200]
+                },
+                "suggestion": "Server may be down. Try again later or run main.py to update cache."
+            }), 500
 
-    except Exception as e:
-        logger.error(f"Error fetching stats for {app_key}: {e}")
-        return jsonify({"error": "Failed to fetch app stats"}), 500
+
+def agregar_errores_por_firma(errores_lista, dia):
+    """
+    Agrupa errores por firma (signature) y cuenta recurrencias.
+    
+    Args:
+        errores_lista: Lista de dicts con 'firma', 'timestamp', etc.
+        dia: fecha del día (para defaults)
+    
+    Returns:
+        Lista de dicts: [{firma: str, count: int, first_time: datetime}, ...]
+        Ordenados por tiempo de primera aparición
+    """
+    from collections import defaultdict
+    
+    agregado = defaultdict(lambda: {'count': 0, 'first_time': None})
+    
+    for error in errores_lista:
+        firma = error.get('firma', 'Unknown error')
+        
+        # El timestamp puede venir de diferentes campos según la fuente
+        timestamp = error.get('timestamp') or error.get('fecha') or datetime.combine(dia, datetime.min.time())
+        
+        agregado[firma]['count'] += 1
+        
+        # Guardar timestamp más temprano
+        if agregado[firma]['first_time'] is None or timestamp < agregado[firma]['first_time']:
+            agregado[firma]['first_time'] = timestamp
+    
+    # Convertir a lista
+    result = []
+    for firma, data in agregado.items():
+        result.append({
+            'firma': firma,
+            'count': data['count'],
+            'first_time': data['first_time'] or datetime.combine(dia, datetime.min.time())
+        })
+    
+    # Ordenar por tiempo de primera aparición
+    result.sort(key=lambda x: x['first_time'])
+    
+    return result
+
+
+def format_errors_for_frontend(aggregated_errors):
+    """
+    Formatea errores agregados para el frontend.
+    
+    Args:
+        aggregated_errors: Lista de dicts con firma, count, first_time
+    
+    Returns:
+        Lista de dicts con timestamp, message, count (formato esperado por JS)
+    """
+    formatted = []
+    for err in aggregated_errors:
+        formatted.append({
+            "timestamp": err["first_time"].strftime('%Y-%m-%d %H:%M:%S'),
+            "message": err["firma"],
+            "count": err["count"]
+        })
+    return formatted
+
+
+def extract_sqlstate_distribution(aggregated_errors):
+    """
+    Extrae y agrupa errores por código SQLSTATE.
+    
+    Args:
+        aggregated_errors: Lista de errores con firma, count, first_time
+    
+    Returns:
+        Lista ordenada por first_time: [
+            {
+                'sqlstate': 'SQLSTATE[40001]',
+                'count': 3,
+                'first_time': '2025-12-21 01:00:41'
+            },
+            ...
+        ]
+    """
+    import re
+    from collections import defaultdict
+    
+    # Pattern para extraer SQLSTATE[XXXXX]
+    pattern = re.compile(r'SQLSTATE\[\w+\]')
+    
+    sqlstate_data = defaultdict(lambda: {'count': 0, 'first_time': None})
+    
+    for error in aggregated_errors:
+        firma = error['firma']
+        match = pattern.search(firma)
+        
+        if match:
+            sqlstate = match.group(0)
+            sqlstate_data[sqlstate]['count'] += error['count']
+            
+            # Guardar el timestamp más temprano
+            if sqlstate_data[sqlstate]['first_time'] is None or \
+               error['first_time'] < sqlstate_data[sqlstate]['first_time']:
+                sqlstate_data[sqlstate]['first_time'] = error['first_time']
+    
+    # Convertir a lista y ordenar por first_time
+    result = []
+    for sqlstate, data in sqlstate_data.items():
+        result.append({
+            'sqlstate': sqlstate,
+            'count': data['count'],
+            'first_time': data['first_time'].strftime('%Y-%m-%d %H:%M:%S') if data['first_time'] else None
+        })
+    
+    # Ordenar por tiempo de primera aparición
+    result.sort(key=lambda x: x['first_time'] if x['first_time'] else '')
+    
+    return result
+
+
+def es_error_sql(mensaje):
+    """
+    Detecta si un error es de tipo SQL.
+    Usa los mismos keywords que sms_notifier para consistencia.
+    
+    Args:
+        mensaje: texto del mensaje de error
+    
+    Returns:
+        bool: True si es error SQL, False si no
+    """
+    msg_upper = mensaje.upper()
+    return any(keyword in msg_upper for keyword in ['SQL', 'SQLSTATE', 'DATABASE', 'PDO'])

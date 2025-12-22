@@ -22,19 +22,19 @@ def _contar_errores_sql(errores: list) -> int:
     count = 0
     for error in errores:
         error_lower = error.lower()
-        if any(keyword in error_lower for keyword in ['sql', 'sqlstate', 'database']):
+        # Keywords relacionados con SQL y base de datos
+        if any(keyword in error_lower for keyword in ['sql', 'sqlstate', 'database', 'pdo']):
             count += 1
     return count
 
 
 def _generar_mensaje_sms(resultado: Dict[str, Any]) -> str:
     """
-    Genera un mensaje SMS conciso a partir del resultado del scraping.
+    Genera un mensaje SMS conciso reportando solo errores SQL.
     
-    Formato del mensaje (máx 160 chars):
-    🚨 [AppName]: X errores NO controlados
-    SQL: Y | Otros: Z
-    Revisar logs urgente
+    Formato actualizado:
+    🚨 [SMS App Name]: X SQL error(s)
+    Check logs immediately
     
     Args:
         resultado: Dict devuelto por procesar_aplicacion()
@@ -42,27 +42,23 @@ def _generar_mensaje_sms(resultado: Dict[str, Any]) -> str:
     Returns:
         str: Mensaje SMS formateado
     """
-    app_name = resultado["app_name"]
+    from app.config import get_sms_app_name
+    
+    app_key = resultado.get("app_key", "unknown")
     no_controlados_nuevos = resultado.get("no_controlados_nuevos", [])
     
-    total_nc = len(no_controlados_nuevos)
+    # Contar solo errores SQL
     sql_count = _contar_errores_sql(no_controlados_nuevos)
-    otros_count = total_nc - sql_count
     
-    # Versión corta del nombre de la app (máx 15 chars)
-    app_short = app_name[:15] if len(app_name) > 15 else app_name
+    # Obtener nombre específico para SMS
+    sms_app_name = get_sms_app_name(app_key)
     
-    # Construir mensaje conciso
-    mensaje_partes = [
-        f"🚨 {app_short}: {total_nc} UNCONTROLLED errors",
-    ]
-    
-    if sql_count > 0 or otros_count > 0:
-        mensaje_partes.append(f"SQL: {sql_count} | Others: {otros_count}")
-    
-    mensaje_partes.append("Check logs immediately")
-    
-    mensaje = "\n".join(mensaje_partes)
+    # Construir mensaje conciso (solo errores SQL)
+    plural = 's' if sql_count != 1 else ''
+    mensaje = (
+        f"🚨 {sms_app_name}: {sql_count} SQL error{plural}\n"
+        "Check logs immediately"
+    )
     
     # Log del mensaje generado
     logger.debug(f"Mensaje SMS generado ({len(mensaje)} chars): {mensaje}")
@@ -95,11 +91,13 @@ def _obtener_cliente_twilio() -> TwilioSMSClient:
 
 def enviar_sms_errores_no_controlados(resultado: Dict[str, Any]) -> bool:
     """
-    Envía un SMS si hay errores NO controlados en el resultado del scraping.
+    Envía un SMS si hay errores SQL entre los errores NO controlados.
+    
+    CAMBIO: Ahora solo alerta sobre errores SQL, no todos los errores NC.
     
     Esta función:
-    1. Verifica si hay errores no controlados
-    2. Genera un mensaje conciso
+    1. Verifica si hay errores SQL entre los no controlados
+    2. Genera un mensaje conciso con la cantidad de errores SQL
     3. Envía el SMS usando TwilioSMSClient
     4. Registra el resultado en logs
     
@@ -118,12 +116,21 @@ def enviar_sms_errores_no_controlados(resultado: Dict[str, Any]) -> bool:
     app_key = resultado.get("app_key", "unknown")
     no_controlados_nuevos = resultado.get("no_controlados_nuevos", [])
     
-    # Solo enviar SMS si hay errores NO controlados
-    if not no_controlados_nuevos:
-        logger.info(
-            f"ℹ️ No se envía SMS para {app_name}: "
-            "No hay errores NO controlados nuevos"
-        )
+    # Contar errores SQL
+    sql_count = _contar_errores_sql(no_controlados_nuevos)
+    
+    # Solo enviar SMS si hay errores SQL
+    if sql_count == 0:
+        if len(no_controlados_nuevos) > 0:
+            logger.info(
+                f"ℹ️ No se envía SMS para {app_name}: "
+                f"No hay errores SQL entre los {len(no_controlados_nuevos)} errores NO controlados"
+            )
+        else:
+            logger.info(
+                f"ℹ️ No se envía SMS para {app_name}: "
+                "No hay errores NO controlados nuevos"
+            )
         return False
     
     try:
@@ -139,7 +146,7 @@ def enviar_sms_errores_no_controlados(resultado: Dict[str, Any]) -> bool:
         if exito:
             logger.info(
                 f"✅ SMS enviado para {app_name}: "
-                f"{len(no_controlados_nuevos)} errores NO controlados"
+                f"{sql_count} errores SQL detectados"
             )
             # Delay para cumplir con rate limit de Twilio Trial (1 SMS/segundo)
             # Usamos 3 segundos para dar margen y evitar errores 404

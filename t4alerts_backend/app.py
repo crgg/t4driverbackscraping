@@ -48,6 +48,16 @@ def create_app():
     # Create Tables within Context
     with app.app_context():
         db.create_all()
+        
+        # Initialize alerted_errors table for scraping system
+        # This ensures the table exists after docker-compose down -v
+        try:
+            from db import init_db
+            init_db()
+            print("✅ Database initialized: alerted_errors table ready")
+        except Exception as e:
+            print(f"⚠️ Warning: Could not initialize alerted_errors table: {e}")
+            print("   The stats endpoint may fall back to reading .log files")
 
     return app
 

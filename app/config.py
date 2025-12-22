@@ -126,6 +126,32 @@ def get_app_urls(app_key: str) -> tuple[str, str, str]:
     return base_url, login_url, logs_url
 
 
+# === MAPEO DE NOMBRES PARA SMS ===
+# Nomenclatura específica para mensajes SMS
+SMS_APP_NAMES = {
+    "driverapp_goto": "DriverApp - Go 2 Logistics",
+    "broker_goto": "BrokerApp - Go 2 Logistics",
+    "klc": "T4App - KLC",
+    "accuratecargo": "T4App - AccurateCargo",
+    "goexperior": "DRIVERAPP - GoExperior",
+    "klc_crossdock": "CrossDock KLC",
+    "t4tms_backend": "T4TMS - Backend",
+}
+
+
+def get_sms_app_name(app_key: str) -> str:
+    """
+    Obtiene el nombre específico de la aplicación para mensajes SMS.
+    
+    Args:
+        app_key: clave en APPS_CONFIG
+    
+    Returns:
+        str: Nombre formateado para SMS
+    """
+    return SMS_APP_NAMES.get(app_key, APPS_CONFIG.get(app_key, {}).get("name", app_key))
+
+
 # === RETROCOMPATIBILIDAD (para código existente) ===
 # Si algo todavía usa estas variables, las asignamos desde la config de GoTo
 USERNAME = os.getenv("DRIVERAPP_USER")

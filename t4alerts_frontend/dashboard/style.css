@@ -230,7 +230,9 @@ body {
     color: var(--neon-blue);
     margin-top: 3rem;
     text-align: center;
-}/* CSS for Stats/Accordion Module */
+}
+
+/* CSS for Stats/Accordion Module */
 
 /* Accordion in Sidebar */
 .accordion-header {
@@ -407,8 +409,19 @@ body {
 /* Stats View (Charts) */
 .stats-view {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 2fr 1fr;
+    /* Chart takes 2/3 width, legend takes 1/3 */
     gap: 20px;
+}
+
+.stats-view .chart-card {
+    max-height: 750px;
+    /* Much taller for prominent bars */
+}
+
+.stats-view .canvas-container {
+    height: 650px;
+    /* Significantly increased - bars will be very visible now */
 }
 
 @media (max-width: 768px) {
