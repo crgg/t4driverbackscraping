@@ -75,8 +75,17 @@ def errors_index():
     return send_from_directory(os.path.join(BASE_DIR, 'dashboard'), 'index.html')
 
 @app.route('/errors/<path:filename>')
-def errors_files(filename):
-    return send_from_directory(os.path.join(BASE_DIR, 'dashboard'), filename)
+def errors_routing(filename):
+    """
+    Handle dashboard routing.
+    If filename has an extension (contains dot), try to serve as static file.
+    Otherwise, serve index.html to allow SPA routing (e.g., /errors/driverapp_goto).
+    """
+    if '.' in filename:
+        return send_from_directory(os.path.join(BASE_DIR, 'dashboard'), filename)
+    
+    # It's an SPA route, serve index.html
+    return send_from_directory(os.path.join(BASE_DIR, 'dashboard'), 'index.html')
 
 # Sirve archivos estáticos globales (static/js/core, etc)
 @app.route('/static/<path:filename>')

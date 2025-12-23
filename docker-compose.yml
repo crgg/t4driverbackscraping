@@ -14,6 +14,52 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - t4net
+
+  backend:
+    build:
+      context: .
+      dockerfile: t4alerts_backend/Dockerfile
+    container_name: t4alerts_backend
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://postgres:logs_password@postgres:5432/postgres
+      - PGHOST=postgres
+      - PGPORT=5432
+      - PGUSER=postgres
+      - PGPASSWORD=logs_password
+      - PGDATABASE=postgres
+      # Pass through other env vars if needed or use env_file
+    env_file:
+      - .env
+    volumes:
+      # Mount source code for cleaner restarts/logging if needed, 
+      # but in pure production we usually rely on COPY in Dockerfile.
+      # For now, let's keep it self-contained.
+      - ./salida_logs:/app/salida_logs
+    depends_on:
+      - postgres
+    networks:
+      - t4net
+
+  frontend:
+    build:
+      context: ./t4alerts_frontend
+      dockerfile: Dockerfile
+    container_name: t4alerts_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - t4net
 
 volumes:
   postgres_data:
+
+networks:
+  t4net:
+    driver: bridge
+

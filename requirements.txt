@@ -13,3 +13,4 @@ Flask-JWT-Extended
 Flask-SQLAlchemy
 bcrypt
 flask-cors
+pytz

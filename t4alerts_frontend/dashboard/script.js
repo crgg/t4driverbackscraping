@@ -12,6 +12,25 @@ class StatsManager {
         this.currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
         this.initDatePicker();
+
+        // Handle Back/Forward navigation
+        window.addEventListener('popstate', (event) => {
+            if (event.state && event.state.appKey) {
+                this.selectApp(event.state.appKey, event.state.appName, null, false);
+            } else {
+                // Return to overview if no state or root /errors/
+                const pathParts = window.location.pathname.split('/');
+                const pathAppKey = pathParts[2]; // /errors/APP_KEY
+
+                if (pathAppKey) {
+                    // If manually navigated back to a URL with app key but no state object
+                    // We'll let loadAppsList handle it or just reload
+                    window.location.reload();
+                } else {
+                    this.showOverview();
+                }
+            }
+        });
     }
 
     initDatePicker() {
@@ -39,13 +58,34 @@ class StatsManager {
             console.log("APPS LOADED:", apps);
 
             this.appsListContainer.innerHTML = '';
+
+            // Check for initial URL routing
+            const pathParts = window.location.pathname.split('/');
+            // Expected format: /errors/APP_KEY
+            const initialAppKey = pathParts.length > 2 && pathParts[1] === 'errors' ? pathParts[2] : null;
+            let initialAppFound = false;
+
             apps.forEach(app => {
                 const item = document.createElement('div');
                 item.className = 'sub-nav-item';
                 item.innerText = app.name;
+
+                // If this is the app from URL, mark it found
+                if (initialAppKey && app.key === initialAppKey) {
+                    item.classList.add('active'); // Pre-highlight
+                    initialAppFound = true;
+                }
+
                 item.onclick = () => this.selectApp(app.key, app.name, item);
                 this.appsListContainer.appendChild(item);
             });
+
+            // If we have an initial app key from URL, load it
+            if (initialAppFound) {
+                const appName = apps.find(a => a.key === initialAppKey).name;
+                this.selectApp(initialAppKey, appName, document.querySelector(`.sub-nav-item.active`), false);
+            }
+
         } catch (error) {
             console.error("STATS LOAD ERROR:", error);
             T4Logger.error("Failed to load apps list", error);
@@ -53,10 +93,21 @@ class StatsManager {
         }
     }
 
-    selectApp(appKey, appName, element) {
+    selectApp(appKey, appName, element, updateHistory = true) {
         // UI Update
         document.querySelectorAll('.sub-nav-item').forEach(el => el.classList.remove('active'));
-        element.classList.add('active');
+        if (element) {
+            element.classList.add('active');
+        } else {
+            // Try to find the element if not passed (e.g. from popstate)
+            const items = document.querySelectorAll('.sub-nav-item');
+            for (const item of items) {
+                if (item.innerText === appName) {
+                    item.classList.add('active');
+                    break;
+                }
+            }
+        }
 
         this.currentAppKey = appKey;
         this.pageTitle.innerText = `Stats: ${appName}`;
@@ -66,7 +117,23 @@ class StatsManager {
         this.feedContainer.style.display = 'none'; // Hide feed when viewing specific app
         this.appViewContainer.style.display = 'block';
 
+        // Update URL
+        if (updateHistory) {
+            const newUrl = `/errors/${appKey}`;
+            window.history.pushState({ appKey, appName }, '', newUrl);
+        }
+
         this.loadAppStats(appKey);
+    }
+
+    showOverview() {
+        this.currentAppKey = null;
+        this.pageTitle.innerText = 'Dashboard Overview';
+        document.querySelectorAll('.sub-nav-item').forEach(el => el.classList.remove('active'));
+
+        this.dashboardOverview.style.display = 'block';
+        this.feedContainer.style.display = 'block';
+        this.appViewContainer.style.display = 'none';
     }
 
     async loadAppStats(appKey) {
@@ -190,7 +257,7 @@ class StatsManager {
             container.style.height = 'auto'; // Collapse height when empty
             container.innerHTML =
                 '<div style="color: #888; text-align: center; padding: 40px 20px; font-size: 14px;">' +
-                'Sin errores SQLSTATE en esta fecha' +
+                'No SQLSTATE errors found for this date' +
                 '</div>' +
                 '<canvas id="sqlChart"></canvas>';
             return;
@@ -315,7 +382,8 @@ class StatsManager {
             colorBox.style.cssText = `width: 20px; height: 20px; background: ${colors[i]}; border: 2px solid ${colors[i].replace('0.7', '1')}; border-radius: 3px; margin-right: 10px; flex-shrink: 0;`;
 
             const text = document.createElement('span');
-            text.style.cssText = 'color: #ccc; font-size: 13px; flex: 1;';
+            text.style.cssText = 'color: #ccc; font-size: 13px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;';
+            text.title = label; // Show full text on hover
             text.textContent = label;
 
             const count = document.createElement('span');
@@ -353,21 +421,32 @@ class StatsManager {
 }
 
 // Global functions for HTML interaction
-window.toggleAccordion = function (id) {
+window.toggleAccordion = async function (id) {
     const content = document.getElementById(id);
     const header = document.getElementById('accordion-stats');
+
+    // If it's open, close it
     if (content.style.maxHeight) {
         content.style.maxHeight = null;
         header.classList.remove('active');
-    } else {
-        content.style.maxHeight = content.scrollHeight + "px";
-        header.classList.add('active');
-        // Lazy load apps if not already
-        if (!window.appsLoaded) {
-            window.statsManager.loadAppsList();
+        return;
+    }
+
+    // It is opening
+    header.classList.add('active');
+
+    // 1. Lazy load apps if not already loaded
+    if (!window.appsLoaded) {
+        // Show loading state if needed, or just await
+        if (window.statsManager) {
+            await window.statsManager.loadAppsList();
             window.appsLoaded = true;
         }
     }
+
+    // 2. Set height AFTER content is definitely there
+    // We can use a slight timeout or just set it now that await is done
+    content.style.maxHeight = content.scrollHeight + "px";
 };
 
 window.switchTab = function (tabName) {

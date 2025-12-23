@@ -17,7 +17,7 @@ KEYWORDS_NO_CONTROLADO = [
 # Estructura: {clave_aplicacion: {config_dict}}
 APPS_CONFIG: Dict[str, Dict] = {
     "driverapp_goto": {
-        "name": "GoTo Logistics",
+        "name": "DRIVERAPP - GO 2 LOGISTICS",
         "base_url": "https://driverapp.goto-logistics.com",
         "login_path": "/login",
         "logs_path": "/logs",
@@ -25,7 +25,7 @@ APPS_CONFIG: Dict[str, Dict] = {
         "password_env": "DRIVERAPP_PASS",
     },
     "goexperior": {
-        "name": "GoExperior",
+        "name": "DRIVERAPP - GOEXPERIOR",
         "base_url": "https://driverapp.goexperior.com",
         "login_path": "/login",
         "logs_path": "/logs",
@@ -33,7 +33,7 @@ APPS_CONFIG: Dict[str, Dict] = {
         "password_env": "GOEXPERIOR_PASS",
     },
     "klc": {
-        "name": "KLC T4App",
+        "name": "T4APP - KLC",
         "base_url": "https://klc.t4app.com",
         "login_path": "/login",
         "logs_path": "/logs",
@@ -41,7 +41,7 @@ APPS_CONFIG: Dict[str, Dict] = {
         "password_env": "KLC_PASS",
     },
     "accuratecargo": {
-        "name": "AccurateCargo T4App",
+        "name": "T4APP - ACCURATECARGO",
         "base_url": "https://accuratecargo.t4app.com",
         "login_path": "/login",
         "logs_path": "/logs",
@@ -49,7 +49,7 @@ APPS_CONFIG: Dict[str, Dict] = {
         "password_env": "ACCURATECARGO_PASS",
     },
     "broker_goto": {
-        "name": "Broker GoTo Logistics",
+        "name": "BROKERAPP - GO 2 LOGISTICS",
         "base_url": "https://broker.goto-logistics.com",
         "login_path": "/login",
         "logs_path": "/logs",
@@ -57,7 +57,7 @@ APPS_CONFIG: Dict[str, Dict] = {
         "password_env": "BROKER_GOTO_PASS",
     },
     "klc_crossdock": {
-        "name": "KLC Crossdock T4App",
+        "name": "CROSSDOCK - KLC",
         "base_url": "https://klccrossdock.t4app.com",
         "login_path": "/login",
         "logs_path": "/logs",

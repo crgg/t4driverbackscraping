@@ -409,9 +409,11 @@ body {
 /* Stats View (Charts) */
 .stats-view {
     display: grid;
-    grid-template-columns: 2fr 1fr;
-    /* Chart takes 2/3 width, legend takes 1/3 */
+    grid-template-columns: 3fr 1fr;
+    /* Chart takes 75% width, legend takes 25% */
     gap: 20px;
+    align-items: start;
+    /* Prevent legend from stretching to match chart height */
 }
 
 .stats-view .chart-card {
@@ -428,4 +430,12 @@ body {
     .stats-view {
         grid-template-columns: 1fr;
     }
+}
+
+#legend-items {
+    max-height: 550px;
+    /* Adapts to the chart height */
+    overflow-y: auto;
+    padding-right: 5px;
+    /* Space for scrollbar */
 }

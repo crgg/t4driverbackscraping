@@ -29,8 +29,11 @@ def procesar_aplicacion(app_key: str, fecha_str: str, dia: date) -> Dict[str, An
 
         # DEBUG - Guardar HTML de debug (con sufijo de app para diferenciarlo)
         # debug_file = f"debug_logs_{app_key}.html"
-        # Path(debug_file).write_text(html, encoding="utf-8")
-        # print(f"✓ HTML guardado en {debug_file}")
+        # try:
+        #     Path(debug_file).write_text(html, encoding="utf-8")
+        #     print(f"✓ HTML guardado en {debug_file}")
+        # except Exception as e:
+        #     print(f"Error saving debug file: {e}")
 
         controlados, no_controlados = classify_logs(html)
 
