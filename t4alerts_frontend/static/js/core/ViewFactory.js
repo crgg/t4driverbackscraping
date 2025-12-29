@@ -14,6 +14,20 @@ class ViewFactory {
             case 'certificates':
                 window.location.href = '/certificates';
                 break;
+            case 'error-history':
+                // SPA navigation pattern
+                window.history.pushState({ page: 'history' }, '', '/errors/history');
+
+                document.querySelectorAll('main > div').forEach(div => div.style.display = 'none');
+                document.querySelector('main > header').style.display = 'flex';
+                document.getElementById('view-error-history').style.display = 'block';
+                document.getElementById('page-title').innerText = 'Global Error History';
+
+                // Call global loader
+                if (window.loadErrorHistory) {
+                    window.loadErrorHistory();
+                }
+                break;
             case 'errors':
                 window.location.href = '/errors';
                 break;

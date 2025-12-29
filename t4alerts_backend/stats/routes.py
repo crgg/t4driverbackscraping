@@ -387,3 +387,61 @@ def es_error_sql(mensaje):
     """
     msg_upper = mensaje.upper()
     return any(keyword in msg_upper for keyword in ['SQL', 'SQLSTATE', 'DATABASE', 'PDO'])
+@stats_bp.route('/send-email', methods=['POST'])
+@jwt_required()
+def send_error_email_endpoint():
+    """
+    Manually triggers an email notification for a specific error.
+    Body:
+    {
+        "app_key": "driverapp_goto", // Optional if subject is full
+        "recipients": ["user@example.com"],
+        "subject": "Custom Subject",
+        "body": "Custom Body"
+    }
+    """
+    try:
+        data = request.get_json()
+        recipients = data.get('recipients')
+        subject = data.get('subject')
+        body = data.get('body')
+        
+        if not recipients or not subject or not body:
+            return jsonify({'error': 'Missing required fields (recipients, subject, or body)'}), 400
+            
+        # Ensure recipients is a list
+        if isinstance(recipients, str):
+            recipients = [r.strip() for r in recipients.split(',')]
+            
+        # Clean up empty strings
+        recipients = [r for r in recipients if r]
+        
+        if not recipients:
+             return jsonify({'error': 'No valid recipients provided'}), 400
+
+        # Import sender dynamically with correct path check
+        try:
+            from app.alerts import send_email
+        except ImportError:
+            # Fallback for when running from different contexts
+            import sys
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+            from app.alerts import send_email
+        
+        # Format body as HTML 
+        # We trust the frontend to send properly formatted HTML with styles
+        html_body = body
+        
+        # Send
+        # send_email(subject, html_body, to_addrs, sender_name=None)
+        send_email(subject, html_body, recipients)
+        
+        # Note: send_email does not return success/fail boolean, it logs internally. 
+        # We assume success if no exception raised.
+        
+        logger.info(f"📧 Manual email sent to {recipients}")
+        return jsonify({'message': 'Email sent successfully', 'recipients': recipients}), 200
+            
+    except Exception as e:
+        logger.error(f"Error in send-email endpoint: {e}")
+        return jsonify({'error': str(e)}), 500

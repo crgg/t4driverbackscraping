@@ -38,6 +38,9 @@
                 <div class="nav-item" onclick="ViewFactory.navigateTo('certificates')">
                     <span class="icon">🔒</span> SSL Monitor
                 </div>
+                <div class="nav-item" onclick="ViewFactory.navigateTo('error-history')">
+                    <span class="icon">🕒</span> Error History
+                </div>
                 <div class="nav-item" onclick="ViewFactory.navigateTo('menu')">
                     <span class="icon">🏠</span> Main Menu
                 </div>
@@ -56,6 +59,42 @@
             </header>
 
             <div id="loading" class="loading" style="display: none;">Fetching data...</div>
+
+            <!-- VIEW: Error History -->
+            <div id="view-error-history" style="display: none;">
+
+                <div class="date-selector" style="justify-content: space-between; margin-bottom: 20px;">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <label>Scan Date:</label>
+                        <input type="date" id="history-scan-date" value="">
+                        <button class="tab-btn active" style="border: 1px solid var(--neon-blue); border-radius: 4px;"
+                            onclick="scanAllApps()">
+                            ⚡ SCAN ALL APPS
+                        </button>
+                    </div>
+                    <div id="scan-status" style="color: var(--neon-blue); font-size: 0.9em; display: none;">
+                        Scanning... please wait...
+                    </div>
+                </div>
+
+                <div class="history-container">
+                    <div class="history-header">
+                        <div onclick="sortHistory('app_name')" style="cursor: pointer; user-select: none;">
+                            APP <span id="sort-app_name"></span>
+                        </div>
+                        <div onclick="sortHistory('first_seen')" style="cursor: pointer; user-select: none;">
+                            DATE <span id="sort-first_seen"></span>
+                        </div>
+                        <div>ERROR PREVIEW</div>
+                    </div>
+                    <div id="history-list" class="history-list">
+                        <!-- Injected via script.js -->
+                    </div>
+                    <div id="history-loading" style="text-align: center; padding: 20px; display: none; color: #888;">
+                        Loading history...
+                    </div>
+                </div>
+            </div>
 
             <!-- Stats/Logs View Container -->
             <div id="app-view-container" style="display: none;">
@@ -128,6 +167,49 @@
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Session Expired Modal -->
+    <div id="session-expired-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content" style="max-width: 400px; text-align: center;">
+            <div class="modal-header" style="justify-content: center;">
+                <h3>⚠️ Session Expired</h3>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <p>Your session has expired due to inactivity.</p>
+                <p>Please log in again to continue.</p>
+            </div>
+            <div class="modal-footer" style="justify-content: center;">
+                <button class="btn-primary" onclick="redirectToLogin()">OK, Log In</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Email Modal -->
+    <div id="email-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2 id="email-modal-title">📨 Send Manual Email</h2>
+
+            <div class="input-group">
+                <label for="email-to">Recipients (comma separated):</label>
+                <input type="text" id="email-to" placeholder="user@example.com, admin@example.com" class="dark-input">
+            </div>
+
+            <div class="input-group">
+                <label for="email-subject">Subject:</label>
+                <input type="text" id="email-subject" class="dark-input">
+            </div>
+
+            <div class="input-group">
+                <label for="email-body">Message:</label>
+                <textarea id="email-body" rows="10" class="dark-input code-font"></textarea>
+            </div>
+
+            <div class="modal-actions">
+                <button onclick="closeEmailModal()" class="btn-cancel">Cancel</button>
+                <button onclick="submitErrorEmail()" class="btn-send" id="btn-submit-email">Send Email</button>
+            </div>
+        </div>
     </div>
 
     <script src="script.js"></script>

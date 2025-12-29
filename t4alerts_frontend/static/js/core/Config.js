@@ -17,7 +17,10 @@ class Config {
             errors: `${this.API_BASE_URL}/dashboard/errors`,
             stats_apps: `${this.API_BASE_URL}/stats/apps`,
             stats_apps_debug: `${this.API_BASE_URL}/stats/debug/apps`,
-            stats_view: `${this.API_BASE_URL}/stats/view`
+            stats_view: `${this.API_BASE_URL}/stats/view`,
+            stats_send_email: `${this.API_BASE_URL}/stats/send-email`,
+            error_history: `${this.API_BASE_URL}/error-history/`,
+            error_history_scan: `${this.API_BASE_URL}/error-history/scan`
         };
     }
 

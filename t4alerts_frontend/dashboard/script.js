@@ -115,6 +115,9 @@ class StatsManager {
         // Switch Views
         this.dashboardOverview.style.display = 'none';
         this.feedContainer.style.display = 'none'; // Hide feed when viewing specific app
+        const historyView = document.getElementById('view-error-history');
+        if (historyView) historyView.style.display = 'none';
+
         this.appViewContainer.style.display = 'block';
 
         // Update URL
@@ -214,7 +217,7 @@ class StatsManager {
     }
 
     renderLogs(logs) {
-        const renderList = (list, containerId) => {
+        const renderList = (list, containerId, isControlled) => {
             const container = document.getElementById(containerId);
             container.innerHTML = '';
             if (list.length === 0) {
@@ -223,20 +226,130 @@ class StatsManager {
             }
 
             list.forEach(log => {
-                const div = document.createElement('div');
-                div.className = 'log-item';
-                // matches user request: "2025-12-19 ... - Message (xCount)"
-                div.innerHTML = `
-                    <span class="log-timestamp">${log.timestamp}</span> — 
-                    ${log.message}
-                    <span class="log-count">(x${log.count})</span>
-                `;
-                container.appendChild(div);
+                const item = this.createAccordionLogItem(log, isControlled);
+                container.appendChild(item);
             });
         };
 
-        renderList(logs.uncontrolled, 'logs-uncontrolled');
-        renderList(logs.controlled, 'logs-controlled');
+        renderList(logs.uncontrolled, 'logs-uncontrolled', false);
+        renderList(logs.controlled, 'logs-controlled', true);
+    }
+
+    createAccordionLogItem(log, isControlled) {
+        const row = document.createElement('div');
+        row.className = 'history-item'; // Reuses existing table styles
+
+        const summary = document.createElement('div');
+        summary.className = 'history-summary';
+        // Override grid layout for this specific view to maximize space
+        summary.style.display = 'flex';
+        summary.style.alignItems = 'center';
+        summary.style.gap = '15px';
+
+        // Timestamp
+        const dateEl = document.createElement('div');
+        dateEl.className = 'history-date';
+        dateEl.style.minWidth = '140px';
+        dateEl.innerText = log.timestamp;
+
+        // Message Preview
+        const previewEl = document.createElement('div');
+        previewEl.className = 'history-preview';
+        previewEl.style.flex = '1';
+        previewEl.innerText = escapeHtml(log.message);
+        if (isControlled) previewEl.style.color = '#aaa';
+
+        // Count Badge
+        const countEl = document.createElement('div');
+        countEl.className = 'app-badge'; // Reuse badge style
+        countEl.style.background = isControlled ? 'rgba(255, 191, 0, 0.1)' : 'rgba(255, 0, 85, 0.1)';
+        countEl.style.color = isControlled ? '#ffbf00' : '#ff0055';
+        countEl.style.borderColor = isControlled ? 'rgba(255, 191, 0, 0.3)' : 'rgba(255, 0, 85, 0.3)';
+        countEl.innerText = `x${log.count}`;
+
+        // === 3-DOT MENU LOGIC ===
+        const menuContainer = document.createElement('div');
+        menuContainer.className = 'menu-container';
+
+        const menuBtn = document.createElement('button');
+        menuBtn.className = 'menu-btn';
+        menuBtn.innerHTML = '&#8942;'; // Vertical ellipsis
+        menuBtn.title = 'Options';
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'menu-dropdown';
+
+        // Use a data attribute to store the message safely.
+        // We need to escape double quotes for the attribute value.
+        const safeMessage = log.message.replace(/"/g, '&quot;');
+
+        dropdown.innerHTML = `
+            <button class="menu-item" 
+                    data-full-content="${safeMessage}"
+                    onclick="sendErrorEmail(event, '${log.timestamp}', this)">
+                📧 Send Email
+            </button>
+        `;
+
+        menuBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent accordion toggle
+
+            // Close other open menus
+            document.querySelectorAll('.menu-dropdown.show').forEach(d => {
+                if (d !== dropdown) d.classList.remove('show');
+            });
+
+            dropdown.classList.toggle('show');
+        });
+
+        // Close menu when clicking elsewhere
+        window.addEventListener('click', (e) => {
+            if (!menuContainer.contains(e.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
+
+        menuContainer.appendChild(menuBtn);
+        menuContainer.appendChild(dropdown);
+        // =========================
+
+        summary.appendChild(dateEl);
+        summary.appendChild(previewEl);
+        summary.appendChild(countEl);
+        summary.appendChild(menuContainer);
+
+        // Detail View (Accordion)
+        const detail = document.createElement('div');
+        detail.className = 'history-detail';
+        detail.innerHTML = `
+            <div class="history-detail-content">
+                <pre class="code-block">${escapeHtml(log.message)}</pre>
+            </div>
+        `;
+
+        // Toggle Logic
+        summary.addEventListener('click', (e) => {
+            // Ignore clicks on menu
+            if (menuContainer.contains(e.target)) return;
+
+            const isOpen = row.classList.contains('active');
+
+            // Optional: Close others in the same container? 
+            // Let's keep multiple open support for comparison
+
+            if (!isOpen) {
+                row.classList.add('active');
+                detail.style.maxHeight = detail.scrollHeight + "px";
+            } else {
+                row.classList.remove('active');
+                detail.style.maxHeight = null;
+            }
+        });
+
+        row.appendChild(summary);
+        row.appendChild(detail);
+
+        return row;
     }
 
     renderStatsChart(stats) {
@@ -538,3 +651,419 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('current-date').innerText = new Date().toLocaleDateString();
     new DashboardView().init();
 });
+
+// --- ERROR HISTORY MODULE ---
+// --- ERROR HISTORY MODULE ---
+window.historyData = [];
+window.historySort = { col: 'first_seen', asc: false }; // Default sort by date desc
+
+window.loadErrorHistory = async function () {
+    const historyList = document.getElementById('history-list');
+    const loading = document.getElementById('history-loading');
+
+    historyList.innerHTML = '';
+    loading.style.display = 'block';
+
+    try {
+        const token = localStorage.getItem('t4_access_token');
+        const response = await fetch(`${window.T4Config.getEndpoint('error_history')}?limit=100`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to load history');
+        }
+
+        const data = await response.json();
+        window.historyData = data; // Store globally for sorting
+
+        loading.style.display = 'none';
+
+        if (window.historyData.length === 0) {
+            historyList.innerHTML = '<div style=\"text-align:center; padding: 20px; color:#888;\">No historical errors found.</div>';
+            return;
+        }
+
+        renderHistory();
+
+    } catch (err) {
+        console.error(err);
+        loading.style.display = 'none';
+        historyList.innerHTML = `<div style="color:red; padding:20px;">Error: ${err.message}</div>`;
+    }
+};
+
+window.sortHistory = function (col) {
+    // If clicking same column, toggle direction
+    if (window.historySort.col === col) {
+        window.historySort.asc = !window.historySort.asc;
+    } else {
+        window.historySort.col = col;
+        window.historySort.asc = true; // Default asc for new col
+    }
+    renderHistory();
+};
+
+window.renderHistory = function () {
+    const historyList = document.getElementById('history-list');
+    historyList.innerHTML = '';
+
+    // Sort Data
+    const { col, asc } = window.historySort;
+    window.historyData.sort((a, b) => {
+        let valA = a[col];
+        let valB = b[col];
+
+        // Handling nulls
+        if (valA == null) valA = "";
+        if (valB == null) valB = "";
+
+        // Case insensitive string sort
+        if (typeof valA === 'string') valA = valA.toLowerCase();
+        if (typeof valB === 'string') valB = valB.toLowerCase();
+
+        if (valA < valB) return asc ? -1 : 1;
+        if (valA > valB) return asc ? 1 : -1;
+        return 0;
+    });
+
+    // Update Headers (Arrows)
+    ['app_name', 'first_seen'].forEach(c => {
+        const arrowEl = document.getElementById(`sort-${c}`);
+        if (arrowEl) {
+            arrowEl.innerText = '';
+            if (col === c) {
+                arrowEl.innerText = asc ? '▲' : '▼';
+            }
+        }
+    });
+
+    // Render Items
+    window.historyData.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'history-item';
+
+        // Convert ISO date to local time
+        // item.first_seen comes as "2025-12-29T15:30:00" (ISOish)
+        // If it was naive UTC from backend, new Date(item.first_seen + 'Z') might be needed if no Z provided.
+        // Assuming backend sends simplistic ISO. Let's try parsing it directly.
+        // If backend sends "2025-12-29T15:00:00", browser assumes local unless Z present.
+        // Actually, best practice is to treat backend dates as UTC if not specified.
+        // However, standard DB timestamp often lacks timezone.
+        // Let's assume the string from backend IS valid for Date constructor.
+
+        let displayDate = item.first_seen;
+
+        // Content-based override for consistency
+        // If the error content has a timestamp, use it for display
+        const contentTimeMatch = (item.error_content || '').match(/(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
+        try {
+            if (contentTimeMatch) {
+                displayDate = contentTimeMatch[1];
+            } else if (item.first_seen) {
+                const d = new Date(item.first_seen);
+                // Format: YYYY-MM-DD HH:MM:SS
+                displayDate = d.toLocaleString('sv-SE'); // ISO-like format locally
+            }
+        } catch (e) { console.error("Date parse error", e); }
+
+        const summary = document.createElement('div');
+        summary.className = 'history-summary';
+        summary.innerHTML = `
+            <div><span class=\"app-badge\">${escapeHtml(item.app_name)}</span></div>
+            <div class=\"history-date\">${displayDate}</div>
+            <div class=\"history-preview\">${escapeHtml(item.error_content)}</div>
+        `;
+
+        // Detail
+        const detail = document.createElement('div');
+        detail.className = 'history-detail';
+        detail.innerHTML = `
+            <div class=\"history-detail-content\">
+                    <pre class=\"code-block\">${escapeHtml(item.error_content)}</pre>
+                </div>
+            `;
+
+        // Accordion Click
+        summary.addEventListener('click', () => {
+            const isOpen = row.classList.contains('active');
+
+            // Close all others (optional)
+            document.querySelectorAll('.history-item.active').forEach(r => {
+                r.classList.remove('active');
+                r.querySelector('.history-detail').style.maxHeight = null;
+            });
+
+            if (!isOpen) {
+                row.classList.add('active');
+                detail.style.maxHeight = detail.scrollHeight + "px";
+            }
+        });
+
+        row.appendChild(summary);
+        row.appendChild(detail);
+        historyList.appendChild(row);
+    });
+
+};
+
+// Helper for XSS prevention
+function escapeHtml(text) {
+    if (!text) return '';
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+// --- GLOBAL SCAN MODULE ---
+window.scanAllApps = async function () {
+    const dateInput = document.getElementById('history-scan-date');
+    const statusDiv = document.getElementById('scan-status');
+    const dateVal = dateInput.value || new Date().toISOString().split('T')[0];
+
+    statusDiv.style.display = 'block';
+    statusDiv.innerHTML = '⚡ Scanning all apps... this takes a while...';
+    statusDiv.style.color = 'var(--neon-blue)';
+
+    try {
+        const token = localStorage.getItem('t4_access_token');
+        const response = await fetch(window.T4Config.getEndpoint('error_history_scan'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ date: dateVal })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Scan failed');
+        }
+
+        // Success
+        statusDiv.innerHTML = `✅ Scan Complete! processed ${result.total_critical_errors_processed} errors. Refreshing list...`;
+        statusDiv.style.color = 'var(--accent-green)';
+
+        // Reload history to show new items
+        setTimeout(() => {
+            window.loadErrorHistory();
+        }, 1000);
+
+    } catch (err) {
+        console.error(err);
+        statusDiv.innerHTML = `❌ Error: ${err.message}`;
+        statusDiv.style.color = 'var(--neon-red)';
+    }
+};
+
+// Initialize date picker on load
+document.addEventListener('DOMContentLoaded', () => {
+    const d = new Date().toISOString().split('T')[0];
+    const picker = document.getElementById('history-scan-date');
+    if (picker && !picker.value) picker.value = d;
+});
+
+// --- EMAIL NOTIFICATION MODULE ---
+// --- EMAIL MODAL MODULE ---
+// Friendly Names Mapping (Matches Backend Config)
+const APP_NAMES = {
+    "driverapp_goto": "DRIVERAPP - GO 2 LOGISTICS",
+    "goexperior": "DRIVERAPP - GOEXPERIOR",
+    "klc": "T4APP - KLC",
+    "accuratecargo": "T4APP - ACCURATECARGO",
+    "broker_goto": "BROKERAPP - GO 2 LOGISTICS",
+    "klc_crossdock": "CROSSDOCK - KLC",
+    "t4tms_backend": "T4TMS - BACKEND"
+};
+
+// --- AUTH HELPER ---
+window.handleAuthError = function (response) {
+    if (response.status === 401) {
+        openSessionExpiredModal();
+        return true; // handled
+    }
+    return false; // not handled
+};
+
+window.openSessionExpiredModal = function () {
+    document.getElementById('session-expired-modal').style.display = 'flex';
+};
+
+window.redirectToLogin = function () {
+    // Determine login URL based on environment or hardcode
+    // Usually it's just /login or the root
+    window.location.href = '/login.html'; // Assuming there is a login page
+};
+
+
+// --- EMAIL MODAL MODULE ---
+// State to hold current email context
+window.currentEmailContext = null;
+
+window.openEmailModal = function (event, timestamp, btn) {
+    if (event) event.stopPropagation();
+
+    // Close dropdown
+    if (btn) btn.closest('.menu-dropdown').classList.remove('show');
+
+    // Get error content from DATA ATTRIBUTE
+    // We decode it because it is URI encoded to be attribute-safe
+    let rawContent = "Error content not found.";
+    const encodedContent = btn.getAttribute('data-full-content');
+
+    if (encodedContent) {
+        try {
+            rawContent = decodeURIComponent(encodedContent);
+        } catch (e) {
+            console.error("Failed to decode error content", e);
+            rawContent = "Error decoding content.";
+        }
+    }
+
+    const appKey = window.statsManager.currentAppKey;
+
+    // Resolve friendly name
+    // If not found in map, fallback to appKey (maybe capitalized)
+    const friendlyName = APP_NAMES[appKey] || appKey.replace(/_/g, ' ').toUpperCase();
+
+    // Extract time from rawContent if possible to match what user sees
+    let emailTimestamp = timestamp;
+    const timeMatch = rawContent.match(/(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
+    if (timeMatch) {
+        emailTimestamp = timeMatch[1];
+    }
+
+    // Save context for submission
+    window.currentEmailContext = { appKey, timestamp: emailTimestamp };
+
+    // Pre-fill Modal
+    document.getElementById('email-to').value = '';
+    document.getElementById('email-subject').value = `Manual Alert: Error in ${friendlyName}`;
+    document.getElementById('email-body').value =
+        `MANUAL ALERT TRIGGERED
+
+Application: ${friendlyName}
+Time: ${emailTimestamp}
+
+Error Content:
+--------------------------------------------------
+${rawContent}
+--------------------------------------------------`;
+
+    // Show Modal
+    document.getElementById('email-modal').style.display = 'flex';
+};
+
+window.closeEmailModal = function () {
+    document.getElementById('email-modal').style.display = 'none';
+    window.currentEmailContext = null;
+
+    const btn = document.getElementById('btn-submit-email');
+    btn.innerHTML = 'Send Email';
+    btn.disabled = false;
+};
+
+window.submitErrorEmail = async function () {
+    const btn = document.getElementById('btn-submit-email');
+    const recipients = document.getElementById('email-to').value;
+    const subject = document.getElementById('email-subject').value;
+    const bodyText = document.getElementById('email-body').value;
+
+    if (!recipients) {
+        alert("Please enter at least one recipient.");
+        return;
+    }
+
+    // --- HTML FORMATTING LOGIC ---
+    // Convert the plain text to the requested HTML format
+    let htmlBody = escapeHtml(bodyText); // First, safety escape
+
+    // Restore newlines as <br> placeholder
+    htmlBody = htmlBody.replace(/\n/g, '<br>');
+
+    // Apply bold to specific headers (MANUAL ALERT TRIGGERED)
+    htmlBody = htmlBody.replace(/(MANUAL ALERT TRIGGERED)/g, '<strong>$1</strong>');
+
+    // Apply Blue to metadata lines (Application: ..., Time: ...)
+    htmlBody = htmlBody.replace(/(Application:.*?)<br>/g, '<span style="color: blue;">$1</span><br>');
+    htmlBody = htmlBody.replace(/(Time:.*?)<br>/g, '<span style="color: blue;">$1</span><br>');
+
+    // Apply Red & Bold to Error Content (Everything after the separator)
+    if (htmlBody.includes('Error Content:')) {
+        const parts = htmlBody.split('Error Content:');
+        const preContent = parts[0];
+        const postContent = parts[1];
+
+        // We wrap postContent in div to ensure style applies to all of it
+        htmlBody = `${preContent}
+            <strong style="color: red;">Error Content:${postContent}</strong>`;
+    }
+
+    // Wrap in a div for global font
+    htmlBody = `<div style="font-family: sans-serif; font-size: 14px; color: #000;">${htmlBody}</div>`;
+    // -----------------------------
+
+    btn.innerHTML = '⏳ Sending...';
+    btn.disabled = true;
+
+    try {
+        const token = localStorage.getItem('t4_access_token');
+        const response = await fetch(window.T4Config.getEndpoint('stats_send_email'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                recipients: recipients,
+                subject: subject,
+                body: htmlBody, // Send formatted HTML
+                app_key: window.currentEmailContext ? window.currentEmailContext.appKey : null
+            })
+        });
+
+        // Auth Check
+        if (window.handleAuthError(response)) {
+            btn.innerHTML = '⚠️ Session Expired';
+            btn.disabled = false;
+            return;
+        }
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Failed to send email');
+        }
+
+        // Success
+        btn.innerHTML = '✅ Sent!';
+        setTimeout(() => {
+            closeEmailModal();
+        }, 1000);
+
+    } catch (err) {
+        console.error(err);
+        btn.innerHTML = '❌ Error';
+        alert(`Failed to send email: ${err.message}`);
+        btn.disabled = false;
+    }
+};
+
+// Update the onclick handler in the dropdown to use openEmailModal
+// We need to Monkey Patch or re-define sendErrorEmail to redirect to openEmailModal
+// to avoid rewriting the big createAccordionLogItem function again if possible.
+window.sendErrorEmail = window.openEmailModal;
+
+// Expose to window
+window.scanAllApps = window.scanAllApps;
+window.sendErrorEmail = window.sendErrorEmail;
+window.submitErrorEmail = window.submitErrorEmail;
+window.closeEmailModal = window.closeEmailModal;
+

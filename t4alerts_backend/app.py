@@ -44,6 +44,10 @@ def create_app():
     
     from t4alerts_backend.stats import stats_bp
     app.register_blueprint(stats_bp, url_prefix='/api/stats')
+    
+    # Error History Blueprint (PRD 2.0)
+    from t4alerts_backend.error_history.routes import error_history_bp
+    app.register_blueprint(error_history_bp, url_prefix='/api/error-history')
 
     # Create Tables within Context
     with app.app_context():

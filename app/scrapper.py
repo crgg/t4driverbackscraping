@@ -64,6 +64,41 @@ def procesar_aplicacion(app_key: str, fecha_str: str, dia: date) -> Dict[str, An
     )
     print("✓ Logs guardados en carpeta 'salida_logs' (solo nuevos)")
 
+    # 4) Guardar Historial Global (Error History Module)
+    # Solo nos interesan los NO controlados para este historial crítico
+    # Intentamos guardar TANTO los nuevos como los avisados.
+    # La BD se encarga de ignorar duplicados (ON CONFLICT DO NOTHING).
+    todos_no_controlados = no_controlados_nuevos + no_controlados_avisados
+    
+    if todos_no_controlados:
+        try:
+            from db.error_history import insert_error_history, init_error_history_db
+            import re
+            from datetime import datetime
+            
+            # Asegurar que la tabla existe (idempotente)
+            init_error_history_db()
+            
+            count_hist = 0
+            # Regex común para: "2025-12-29 11:12:39"
+            date_pattern = re.compile(r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})')
+            
+            for error_str in todos_no_controlados:
+                # Intentar extraer fecha real del texto
+                match = date_pattern.search(error_str)
+                timestamp = None
+                if match:
+                    try:
+                        timestamp = datetime.strptime(match.group(1), '%Y-%m-%d %H:%M:%S')
+                    except ValueError:
+                        pass # Usar default NOW() si falla parsing
+                
+                insert_error_history(app_name, error_str, timestamp)
+                count_hist += 1
+            print(f"✓ Historial actualizado: {count_hist} errores procesados para deduplicación")
+        except Exception as e_hist:
+            print(f"⚠️ Error al guardar historial: {e_hist}")
+
     return {
         "app_key": app_key,
         "app_name": app_name,
