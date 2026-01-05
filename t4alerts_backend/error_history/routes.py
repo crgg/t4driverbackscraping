@@ -1,11 +1,13 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
+from t4alerts_backend.common.decorators import permission_required
 from db.error_history import get_error_history
 
 error_history_bp = Blueprint('error_history', __name__)
 
 @error_history_bp.route('/', methods=['GET'])
 @jwt_required()
+@permission_required('view_errors')
 def get_history():
     """
     Get global error history.
@@ -28,6 +30,7 @@ def get_history():
         return jsonify({"error": str(e)}), 500
 @error_history_bp.route('/scan', methods=['POST'])
 @jwt_required()
+@permission_required('view_errors')
 def scan_all_apps():
     """
     Triggers scraping for ALL configured apps for a specific date.

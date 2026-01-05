@@ -11,23 +11,36 @@
     <script src="../shared/Logger.js"></script>
     <script src="../static/js/core/Config.js"></script>
     <script src="../static/js/core/ViewFactory.js"></script>
+    <script src="../shared/PermissionManager.js"></script>
 </head>
 
 <body>
     <div class="menu-container">
         <header>
+            <div class="header-top">
+                <button onclick="logout()" class="logout-btn-header">Logout</button>
+            </div>
             <h1>🚨 T4 Alerts 🚨</h1>
             <p>Select a module to monitor</p>
         </header>
 
         <div class="options-wrapper">
-            <div class="menu-card" onclick="ViewFactory.navigateTo('certificates')">
+            <!-- Admin Panel - Only visible to admins -->
+            <div class="menu-card" id="adminCard" data-permission="admin" style="display: none;">
+                <span class="siren-icon">🔐</span>
+                <h2>Admin Panel</h2>
+                <p>Manage user permissions</p>
+            </div>
+
+            <!-- Certificates - Requires view_certificates permission -->
+            <div class="menu-card" id="certificatesCard" data-permission="view_certificates" style="display: none;">
                 <span class="siren-icon">🚨</span>
                 <h2>SSL Certificates</h2>
                 <p>Monitor SSL expiration dates</p>
             </div>
 
-            <div class="menu-card" onclick="ViewFactory.navigateTo('errors')">
+            <!-- Errors - Requires view_errors permission -->
+            <div class="menu-card" id="errorsCard" data-permission="view_errors" style="display: none;">
                 <span class="siren-icon">🚨</span>
                 <h2>Error Dashboard</h2>
                 <p>Real-time statistics of errors</p>

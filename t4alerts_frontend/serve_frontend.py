@@ -87,6 +87,20 @@ def errors_routing(filename):
     # It's an SPA route, serve index.html
     return send_from_directory(os.path.join(BASE_DIR, 'dashboard'), 'index.html')
 
+@app.route('/admin')
+def admin_redirect():
+    return redirect('/admin/')
+
+@app.route('/admin/')
+def admin_index():
+    """Sirve la página de administración"""
+    return send_from_directory(os.path.join(BASE_DIR, 'admin'), 'index.html')
+
+@app.route('/admin/<path:filename>')
+def admin_files(filename):
+    """Sirve archivos estáticos de admin"""
+    return send_from_directory(os.path.join(BASE_DIR, 'admin'), filename)
+
 # Sirve archivos estáticos globales (static/js/core, etc)
 @app.route('/static/<path:filename>')
 def static_files(filename):

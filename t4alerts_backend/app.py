@@ -37,10 +37,12 @@ def create_app():
     from t4alerts_backend.menu import menu_bp
     from t4alerts_backend.certificates import certificates_bp
     from t4alerts_backend.dashboard import dashboard_bp
+    from t4alerts_backend.admin import admin_bp
     
     app.register_blueprint(menu_bp, url_prefix='/api/menu')
     app.register_blueprint(certificates_bp, url_prefix='/api/certificates')
     app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
+    app.register_blueprint(admin_bp, url_prefix='/api/admin')
     
     from t4alerts_backend.stats import stats_bp
     app.register_blueprint(stats_bp, url_prefix='/api/stats')
@@ -51,6 +53,9 @@ def create_app():
 
     # Create Tables within Context
     with app.app_context():
+        # Import admin models to register them with SQLAlchemy
+        from t4alerts_backend.admin.models import UserPermission
+        
         db.create_all()
         
         # Initialize alerted_errors table for scraping system
@@ -62,6 +67,9 @@ def create_app():
         except Exception as e:
             print(f"⚠️ Warning: Could not initialize alerted_errors table: {e}")
             print("   The stats endpoint may fall back to reading .log files")
+        
+        # Log that permissions system is ready
+        print("✅ Permissions system initialized")
 
     return app
 

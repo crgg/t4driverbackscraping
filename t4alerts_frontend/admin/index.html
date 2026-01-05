@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>T4 Alerts - Admin Management</title>
+    <!-- Premium Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="../shared/Logger.js"></script>
+    <script src="../static/js/core/Config.js"></script>
+    <script src="../shared/PermissionManager.js"></script>
+</head>
+
+<body>
+    <div class="admin-container">
+        <header class="admin-header">
+            <div class="header-content">
+                <h1>🔐 Admin Panel</h1>
+                <p>User Permission Management</p>
+            </div>
+            <button class="btn-back" onclick="window.location.href='/menu'">← Back to Menu</button>
+        </header>
+
+        <div class="admin-content">
+            <!-- Loading state -->
+            <div id="loadingState" class="loading-section">
+                <div class="loader"></div>
+                <p>Loading users...</p>
+            </div>
+
+            <!-- Error state -->
+            <div id="errorState" class="error-section" style="display: none;">
+                <p class="error-message">Failed to load users. Please try again.</p>
+                <button class="btn-retry" onclick="loadUsers()">Retry</button>
+            </div>
+
+            <!-- Users table -->
+            <div id="usersTable" style="display: none;">
+                <div class="table-header">
+                    <h2>Users & Permissions</h2>
+                    <div class="stats">
+                        <span id="userCount">0 users</span>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table class="users-table">
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Created</th>
+                                <th class="permission-col">
+                                    <div class="permission-header">
+                                        <span>🔒 Certificates</span>
+                                        <small>View SSL certificates</small>
+                                    </div>
+                                </th>
+                                <th class="permission-col">
+                                    <div class="permission-header">
+                                        <span>🚨 Errors</span>
+                                        <small>View error dashboard</small>
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            <!-- Rows will be inserted here by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast notification -->
+        <div id="toast" class="toast"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

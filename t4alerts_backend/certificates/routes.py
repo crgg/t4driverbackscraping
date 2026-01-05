@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
+from t4alerts_backend.common.decorators import permission_required
 from ssl_checker.checker import SSLChecker
 import logging
 
@@ -8,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 @certificates_bp.route('/status', methods=['GET'])
 @jwt_required()
+@permission_required('view_certificates')
 def get_certificates_status():
     """
     Returns the SSL status for all configured domains.

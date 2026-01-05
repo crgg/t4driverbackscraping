@@ -22,9 +22,19 @@ class EmailPasswordStrategy(AuthStrategy):
         user = User.query.filter_by(email=email).first()
 
         if user and check_password(password, user.password_hash):
-            # Generate Token
-            # We can store role in claims
-            access_token = create_access_token(identity=user.id, additional_claims={"role": user.role})
+            # Get user permissions
+            user_permissions = user.get_permissions()
+            
+            # Generate Token with role and permissions
+            access_token = create_access_token(
+                identity=user.id,
+                additional_claims={
+                    "role": user.role,
+                    "permissions": user_permissions,
+                    "email": user.email
+                }
+            )
             return access_token, None
         
         return None, "Invalid email or password"
+

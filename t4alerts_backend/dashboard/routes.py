@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
+from t4alerts_backend.common.decorators import permission_required
 from db.connection import get_cursor
 import logging
 
@@ -8,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 @dashboard_bp.route('/errors', methods=['GET'])
 @jwt_required()
+@permission_required('view_errors')
 def get_error_stats():
     """
     Returns statistics for the errors dashboard.

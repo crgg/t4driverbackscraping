@@ -246,11 +246,17 @@ class StatsManager {
         summary.style.alignItems = 'center';
         summary.style.gap = '15px';
 
-        // Timestamp
+        // Timestamp - Extract precise time from message if possible (fixes 00:00:00 issue)
+        let displayTimestamp = log.timestamp;
+        const timeMatch = (log.message || '').match(/(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
+        if (timeMatch) {
+            displayTimestamp = timeMatch[1];
+        }
+
         const dateEl = document.createElement('div');
         dateEl.className = 'history-date';
         dateEl.style.minWidth = '140px';
-        dateEl.innerText = log.timestamp;
+        dateEl.innerText = displayTimestamp;
 
         // Message Preview
         const previewEl = document.createElement('div');
@@ -286,7 +292,7 @@ class StatsManager {
         dropdown.innerHTML = `
             <button class="menu-item" 
                     data-full-content="${safeMessage}"
-                    onclick="sendErrorEmail(event, '${log.timestamp}', this)">
+                    onclick="sendErrorEmail(event, '${displayTimestamp}', this)">
                 📧 Send Email
             </button>
         `;
@@ -633,12 +639,19 @@ class DashboardView {
         const container = document.getElementById('feed-list');
         container.innerHTML = '';
         data.forEach(item => {
+            // Try to extract precise time from signature/content if timestamp is just the date
+            let displayTime = new Date(item.timestamp).toLocaleTimeString();
+            const timeMatch = (item.signature || '').match(/(\d{2}:\d{2}:\d{2})/);
+            if (timeMatch) {
+                displayTime = timeMatch[1];
+            }
+
             const div = document.createElement('div');
             div.className = 'feed-item';
             div.innerHTML = `
                 <div style="color: #00f3ff">${item.app}</div>
                 <div title="${item.signature}">${item.signature.substring(0, 50)}...</div>
-                <div>${new Date(item.timestamp).toLocaleTimeString()}</div>
+                <div>${displayTime}</div>
                 <div><span style="color:#ff0055">${item.recurrence}</span></div>
              `;
             container.appendChild(div);
