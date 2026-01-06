@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>T4 Alerts - App Manager</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Shared Scripts -->
+    <script src="../static/js/core/Config.js"></script>
+    <script src="../shared/PermissionManager.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <h1>🖥️ App Manager</h1>
+                <p class="subtitle">Manage monitored applications</p>
+            </div>
+            <div class="header-right">
+                <button class="btn-primary" onclick="openCreateModal()">
+                    ➕ Add Application
+                </button>
+                <button class="btn-secondary" onclick="window.location.href='/menu'">
+                    🏠 Back to Menu
+                </button>
+            </div>
+        </header>
+
+        <!-- Loading State -->
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Loading applications...</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="error" class="error-message" style="display: none;"></div>
+
+        <!-- Apps Table -->
+        <div class="table-container" id="apps-table-container">
+            <table class="apps-table">
+                <thead>
+                    <tr>
+                        <th>App Key</th>
+                        <th>Name</th>
+                        <th>Base URL</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="apps-list">
+                    <!-- Populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modal: Create/Edit App -->
+    <div id="app-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Add Application</h2>
+                <button class="modal-close" onclick="closeAppModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="app-form">
+                    <input type="hidden" id="app-id">
+
+                    <div class="form-group">
+                        <label for="app-key">App Key *</label>
+                        <input type="text" id="app-key" placeholder="e.g., driverapp_goto" required>
+                        <small>Unique identifier (letters, numbers, underscores only)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="app-name">App Name *</label>
+                        <input type="text" id="app-name" placeholder="e.g., DriverApp - Go 2 Logistics" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="base-url">Base URL *</label>
+                        <input type="url" id="base-url" placeholder="https://example.com" required>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="login-path">Login Path</label>
+                            <input type="text" id="login-path" placeholder="/login" value="/login">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="logs-path">Logs Path</label>
+                            <input type="text" id="logs-path" placeholder="/logs" value="/logs">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="username">Username *</label>
+                            <input type="text" id="username" placeholder="Login username" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="password">Password *</label>
+                            <input type="password" id="password" placeholder="Login password" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="is-active" checked>
+                            <span>Active (monitor this app)</span>
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeAppModal()">Cancel</button>
+                <button class="btn-primary" onclick="saveApp()" id="save-btn">Save App</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Scan App -->
+    <div id="scan-modal" class="modal" style="display: none;">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2>📅 Scan Application</h2>
+                <button class="modal-close" onclick="closeScanModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <p id="scan-app-name" class="scan-app-name"></p>
+                <div class="form-group">
+                    <label for="scan-date">Select Date</label>
+                    <input type="date" id="scan-date" required>
+                    <small>Choose the date to scan for errors</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeScanModal()">Cancel</button>
+                <button class="btn-primary" onclick="executeScan()" id="scan-btn">🚀 Start Scan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container"></div>
+
+    <!-- Session Expired Modal -->
+    <div id="session-expired-modal" class="modal" style="display: none;">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3>⚠️ Session Expired</h3>
+            </div>
+            <div class="modal-body">
+                <p>Your session has expired. Please log in again.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" onclick="window.location.href='/login'">OK, Log In</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

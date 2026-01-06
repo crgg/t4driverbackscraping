@@ -20,7 +20,8 @@ class Config {
             stats_view: `${this.API_BASE_URL}/stats/view`,
             stats_send_email: `${this.API_BASE_URL}/stats/send-email`,
             error_history: `${this.API_BASE_URL}/error-history/`,
-            error_history_scan: `${this.API_BASE_URL}/error-history/scan`
+            error_history_scan: `${this.API_BASE_URL}/error-history/scan`,
+            apps: `${this.API_BASE_URL}/apps`
         };
     }
 

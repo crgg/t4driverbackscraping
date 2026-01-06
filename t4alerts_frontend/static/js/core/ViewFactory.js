@@ -28,6 +28,19 @@ class ViewFactory {
                     window.loadErrorHistory();
                 }
                 break;
+            case 'custom-scan':
+                // SPA navigation pattern
+                window.history.pushState({ page: 'custom-scan' }, '', '/errors/custom-scan');
+
+                document.querySelectorAll('main > div').forEach(div => div.style.display = 'none');
+                document.querySelector('main > header').style.display = 'flex';
+                document.getElementById('custom-scan-view').style.display = 'block';
+                document.getElementById('page-title').innerText = 'Custom App Scan';
+
+                // Set default date to today
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('scan-date').value = today;
+                break;
             case 'errors':
                 window.location.href = '/errors';
                 break;

@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', async () => {
  */
 function setupMenuCards() {
     const adminCard = document.getElementById('adminCard');
+    const appsCard = document.getElementById('appsCard');
     const certificatesCard = document.getElementById('certificatesCard');
     const errorsCard = document.getElementById('errorsCard');
 
@@ -41,6 +42,13 @@ function setupMenuCards() {
         adminCard.onclick = () => {
             T4Logger.info("Navigating to admin panel");
             window.location.href = '/admin';
+        };
+
+        // Apps Manager card - only for admins
+        appsCard.style.display = 'block';
+        appsCard.onclick = () => {
+            T4Logger.info("Navigating to app manager");
+            window.location.href = '/apps';
         };
     }
 

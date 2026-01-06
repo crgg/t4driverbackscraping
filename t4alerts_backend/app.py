@@ -38,11 +38,13 @@ def create_app():
     from t4alerts_backend.certificates import certificates_bp
     from t4alerts_backend.dashboard import dashboard_bp
     from t4alerts_backend.admin import admin_bp
+    from t4alerts_backend.apps_manager import apps_manager_bp
     
     app.register_blueprint(menu_bp, url_prefix='/api/menu')
     app.register_blueprint(certificates_bp, url_prefix='/api/certificates')
     app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
+    app.register_blueprint(apps_manager_bp, url_prefix='/api/apps')
     
     from t4alerts_backend.stats import stats_bp
     app.register_blueprint(stats_bp, url_prefix='/api/stats')
@@ -53,8 +55,9 @@ def create_app():
 
     # Create Tables within Context
     with app.app_context():
-        # Import admin models to register them with SQLAlchemy
+        # Import models to register them with SQLAlchemy
         from t4alerts_backend.admin.models import UserPermission
+        from t4alerts_backend.apps_manager.models import MonitoredApp
         
         db.create_all()
         

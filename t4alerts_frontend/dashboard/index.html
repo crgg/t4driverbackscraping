@@ -41,6 +41,9 @@
                 <div class="nav-item" onclick="ViewFactory.navigateTo('error-history')">
                     <span class="icon">🕒</span> Error History
                 </div>
+                <div class="nav-item" onclick="ViewFactory.navigateTo('custom-scan')">
+                    <span class="icon">⚡</span> Custom Scan
+                </div>
                 <div class="nav-item" onclick="ViewFactory.navigateTo('menu')">
                     <span class="icon">🏠</span> Main Menu
                 </div>
@@ -151,6 +154,62 @@
                     <div class="canvas-container">
                         <canvas id="donutChart"></canvas>
                     </div>
+                </div>
+            </div>
+
+            <!-- Custom Scan Form -->
+            <div id="custom-scan-view" style="display: none;">
+                <h2>⚡ Custom App Scan</h2>
+                <p class="subtitle">Scan any application on-demand without configuration</p>
+
+                <form id="custom-scan-form" class="custom-scan-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="scan-base-url">Base URL *</label>
+                            <input type="url" id="scan-base-url" placeholder="https://example.com" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="scan-login-path">Login Path</label>
+                            <input type="text" id="scan-login-path" value="/login" placeholder="/login">
+                        </div>
+                        <div class="form-group">
+                            <label for="scan-logs-path">Logs Path</label>
+                            <input type="text" id="scan-logs-path" value="/logs" placeholder="/logs">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="scan-username">Username *</label>
+                            <input type="text" id="scan-username" placeholder="Login username" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="scan-password">Password *</label>
+                            <input type="password" id="scan-password" placeholder="Login password" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="scan-date">Scan Date</label>
+                            <input type="date" id="scan-date">
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary" id="btn-start-scan">
+                            🚀 Start Scan
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Results Container -->
+                <div id="custom-scan-results" style="display: none; margin-top: 30px;">
+                    <h3>Scan Results</h3>
+                    <!-- Results will be injected here using existing renderLogs() -->
                 </div>
             </div>
 

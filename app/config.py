@@ -15,7 +15,9 @@ KEYWORDS_NO_CONTROLADO = [
 
 # === CONFIGURACIÓN DE MÚLTIPLES APLICACIONES ===
 # Estructura: {clave_aplicacion: {config_dict}}
-APPS_CONFIG: Dict[str, Dict] = {
+
+# LEGACY: Hardcoded configuration (used as fallback)
+APPS_CONFIG_LEGACY: Dict[str, Dict] = {
     "driverapp_goto": {
         "name": "DRIVERAPP - GO 2 LOGISTICS",
         "base_url": "https://driverapp.goto-logistics.com",
@@ -75,9 +77,71 @@ APPS_CONFIG: Dict[str, Dict] = {
 }
 
 
+def get_apps_config_from_db() -> Dict[str, Dict]:
+    """
+    Load active apps from database.
+    Returns empty dict if database is unavailable or no apps found.
+    """
+    try:
+        from t4alerts_backend.apps_manager.models import MonitoredApp
+        return MonitoredApp.to_config_format()
+    except Exception as e:
+        print(f"  ⚠️ Warning: Could not load apps from database: {e}")
+        return {}
+
+
+def get_apps_config() -> Dict[str, Dict]:
+    """
+    Get app configuration with hybrid approach:
+    1. Try to load from database
+    2. If database has apps, merge with legacy config (DB takes precedence)
+    3. If database is empty or unavailable, use legacy hardcoded config
+    
+    This ensures backward compatibility while enabling dynamic configuration.
+    """
+    # Try database first
+    db_config = get_apps_config_from_db()
+    
+    if db_config:
+        # Database has apps - convert legacy format to match DB format
+        legacy_converted = {}
+        for app_key, config in APPS_CONFIG_LEGACY.items():
+            # Skip if already in database
+            if app_key in db_config:
+                continue
+            
+            # Convert legacy format (env vars) to direct credentials
+            username = os.getenv(config.get("username_env", ""))
+            password = os.getenv(config.get("password_env", ""))
+            
+            if username and password:
+                legacy_converted[app_key] = {
+                    "name": config["name"],
+                    "base_url": config["base_url"],
+                    "login_path": config["login_path"],
+                    "logs_path": config["logs_path"],
+                    "username": username,
+                    "password": password,
+                }
+        
+        # Merge: DB apps + legacy apps not in DB
+        merged = {**legacy_converted, **db_config}
+        print(f"  ✅ Loaded {len(db_config)} apps from database, {len(legacy_converted)} from legacy config")
+        return merged
+    
+    # Fallback: use legacy config with env vars
+    print(f"  ℹ️ Using legacy hardcoded config ({len(APPS_CONFIG_LEGACY)} apps)")
+    return APPS_CONFIG_LEGACY
+
+
+# Dynamic config - refreshed on each import
+APPS_CONFIG = get_apps_config()
+
+
 def get_app_credentials(app_key: str) -> tuple[str, str, str]:
     """
     Obtiene las credenciales y nombre de una aplicación.
+    Soporta tanto formato legacy (con username_env/password_env) como nuevo (credenciales directas).
     
     Args:
         app_key: clave en APPS_CONFIG (ej: 'driverapp_goto')
@@ -93,13 +157,25 @@ def get_app_credentials(app_key: str) -> tuple[str, str, str]:
     
     config = APPS_CONFIG[app_key]
     app_name = config["name"]
-    username = os.getenv(config["username_env"])
-    password = os.getenv(config["password_env"])
+    
+    # New format: credentials stored directly
+    if "username" in config and "password" in config:
+        username = config["username"]
+        password = config["password"]
+    # Legacy format: credentials from env vars
+    elif "username_env" in config and "password_env" in config:
+        username = os.getenv(config["username_env"])
+        password = os.getenv(config["password_env"])
+    else:
+        raise RuntimeError(
+            f"Configuración inválida para {app_name}. "
+            f"Falta 'username'/'password' o 'username_env'/'password_env'"
+        )
     
     if not username or not password:
         raise RuntimeError(
             f"Faltan credenciales para {app_name}. "
-            f"Verifica {config['username_env']} y {config['password_env']} en .env"
+            f"Verifica la configuración o variables de entorno"
         )
     
     return app_name, username, password

@@ -11,6 +11,9 @@ class StatsManager {
         this.currentAppKey = null;
         this.currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
+        // Expose helper to window so custom scan can use it
+        window.createAccordionLogItem = this.createAccordionLogItem.bind(this);
+
         this.initDatePicker();
 
         // Handle Back/Forward navigation
@@ -1073,6 +1076,136 @@ window.submitErrorEmail = async function () {
 // We need to Monkey Patch or re-define sendErrorEmail to redirect to openEmailModal
 // to avoid rewriting the big createAccordionLogItem function again if possible.
 window.sendErrorEmail = window.openEmailModal;
+
+// ===== CUSTOM SCAN HANDLER =====
+document.addEventListener('DOMContentLoaded', () => {
+    const customScanForm = document.getElementById('custom-scan-form');
+    if (customScanForm) {
+        customScanForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await executeCustomScan();
+        });
+    }
+});
+
+async function executeCustomScan() {
+    const btn = document.getElementById('btn-start-scan');
+    const resultsContainer = document.getElementById('custom-scan-results');
+
+    // Get form values
+    const baseUrl = document.getElementById('scan-base-url').value.trim();
+    const loginPath = document.getElementById('scan-login-path').value.trim();
+    const logsPath = document.getElementById('scan-logs-path').value.trim();
+    const username = document.getElementById('scan-username').value;
+    const password = document.getElementById('scan-password').value;
+    const date = document.getElementById('scan-date').value;
+
+    // Disable button
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Scanning...';
+
+    try {
+        const token = localStorage.getItem('t4_access_token');
+        const response = await fetch(`${window.T4Config.API_BASE_URL}/stats/scan-adhoc`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                base_url: baseUrl,
+                login_path: loginPath,
+                logs_path: logsPath,
+                username: username,
+                password: password,
+                date: date
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Scan failed');
+        }
+
+        const data = await response.json();
+        console.log('Custom scan completed', data);
+
+        // Show results container
+        resultsContainer.style.display = 'block';
+
+        // Render results using existing table rendering logic
+        renderCustomScanResults(data);
+
+        btn.innerHTML = '✅ Scan Complete';
+        setTimeout(() => {
+            btn.innerHTML = '🚀 Start Scan';
+            btn.disabled = false;
+        }, 2000);
+
+    } catch (error) {
+        console.error('Custom scan error:', error);
+        alert(`Scan failed: ${error.message}`);
+        btn.innerHTML = '🚀 Start Scan';
+        btn.disabled = false;
+    }
+}
+
+function renderCustomScanResults(data) {
+    const resultsContainer = document.getElementById('custom-scan-results');
+
+    // Clear previous results
+    resultsContainer.innerHTML = '<h3>Scan Results</h3>';
+
+    // Create containers for each error type
+    const uncontrolledContainer = document.createElement('div');
+    uncontrolledContainer.className = 'error-section';
+    uncontrolledContainer.innerHTML = '<h4>Errors</h4>';
+
+    const controlledContainer = document.createElement('div');
+    controlledContainer.className = 'error-section';
+    controlledContainer.innerHTML = '<h4>Errors (controlled)</h4>';
+
+    // Render uncontrolled errors
+    if (data.logs && data.logs.length > 0) {
+        const uncontrolledList = document.createElement('div');
+        uncontrolledList.className = 'logs-list';
+        data.logs.forEach(logStr => {
+            // Convert string to object expected by createAccordionLogItem
+            const logObj = {
+                message: logStr,
+                count: 1,
+                timestamp: '' // Function will extract timestamp from message
+            };
+            uncontrolledList.appendChild(window.createAccordionLogItem(logObj, false));
+        });
+        uncontrolledContainer.appendChild(uncontrolledList);
+    } else {
+        uncontrolledContainer.innerHTML += '<p>No uncontrolled errors found ✅</p>';
+    }
+
+    // Render controlled errors
+    if (data.controlled && data.controlled.length > 0) {
+        const controlledList = document.createElement('div');
+        controlledList.className = 'logs-list';
+        data.controlled.forEach(logStr => {
+            // Convert string to object expected by createAccordionLogItem
+            const logObj = {
+                message: logStr,
+                count: 1,
+                timestamp: '' // Function will extract timestamp from message
+            };
+            controlledList.appendChild(window.createAccordionLogItem(logObj, true));
+        });
+        controlledContainer.appendChild(controlledList);
+    } else {
+        controlledContainer.innerHTML += '<p>No controlled errors found ✅</p>';
+    }
+
+    resultsContainer.appendChild(uncontrolledContainer);
+    resultsContainer.appendChild(controlledContainer);
+}
+
+window.executeCustomScan = executeCustomScan;
 
 // Expose to window
 window.scanAllApps = window.scanAllApps;

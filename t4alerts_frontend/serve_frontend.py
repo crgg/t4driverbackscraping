@@ -101,6 +101,20 @@ def admin_files(filename):
     """Sirve archivos estáticos de admin"""
     return send_from_directory(os.path.join(BASE_DIR, 'admin'), filename)
 
+@app.route('/apps')
+def apps_redirect():
+    return redirect('/apps/')
+
+@app.route('/apps/')
+def apps_index():
+    """Sirve la página de gestión de apps"""
+    return send_from_directory(os.path.join(BASE_DIR, 'apps'), 'index.html')
+
+@app.route('/apps/<path:filename>')
+def apps_files(filename):
+    """Sirve archivos estáticos de apps"""
+    return send_from_directory(os.path.join(BASE_DIR, 'apps'), filename)
+
 # Sirve archivos estáticos globales (static/js/core, etc)
 @app.route('/static/<path:filename>')
 def static_files(filename):

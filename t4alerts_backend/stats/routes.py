@@ -445,3 +445,81 @@ def send_error_email_endpoint():
     except Exception as e:
         logger.error(f"Error in send-email endpoint: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@stats_bp.route('/scan-adhoc', methods=['POST'])
+@jwt_required()
+def scan_adhoc():
+    """
+    Ad-hoc scan endpoint: accepts URL, credentials, and date to scan any application on-demand.
+    Returns same format as regular stats endpoints (logs + controlled).
+    """
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['base_url', 'username', 'password']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        base_url = data['base_url']
+        login_path = data.get('login_path', '/login')
+        logs_path = data.get('logs_path', '/logs')
+        username = data['username']
+        password = data['password']
+        date_str = data.get('date', datetime.now().strftime('%Y-%m-%d'))
+        
+        logger.info(f"Ad-hoc scan requested for {base_url} on {date_str}")
+        
+        # Import scraping function
+        from app.scrapper import procesar_aplicacion
+        from app.config import APPS_CONFIG
+        from datetime import date
+        
+        # Parse date
+        try:
+            dia = date.fromisoformat(date_str)
+        except ValueError:
+            return jsonify({'error': f'Invalid date format: {date_str}. Use YYYY-MM-DD'}), 400
+        
+        # Create temporary app key
+        temp_app_key = f"adhoc_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        # Temporarily inject into APPS_CONFIG
+        APPS_CONFIG[temp_app_key] = {
+            "name": f"Ad-Hoc Scan: {base_url}",
+            "base_url": base_url,
+            "login_path": login_path,
+            "logs_path": logs_path,
+            "username": username,
+            "password": password,
+        }
+        
+        try:
+            # Execute scraping
+            resultado = procesar_aplicacion(temp_app_key, date_str, dia)
+            
+            # Format response (same as /view endpoint)
+            uncontrolled_errors = resultado.get('no_controlados_nuevos', []) + resultado.get('no_controlados_avisados', [])
+            controlled_errors = resultado.get('controlados_nuevos', []) + resultado.get('controlados_avisados', [])
+            
+            response = {
+                'logs': uncontrolled_errors,
+                'controlled': controlled_errors,
+                'app_key': temp_app_key,
+                'date': date_str
+            }
+            
+            logger.info(f"Ad-hoc scan completed for {base_url}: {len(uncontrolled_errors)} uncontrolled, {len(controlled_errors)} controlled")
+            return jsonify(response), 200
+            
+        finally:
+            # Clean up temporary config
+            APPS_CONFIG.pop(temp_app_key, None)
+    
+    except Exception as e:
+        logger.error(f"Error in ad-hoc scan: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
