@@ -22,11 +22,20 @@ def get_apps():
     Returns the list of configured applications for the accordion menu.
     """
     try:
+        # Reload config dynamically to include any newly added apps in DB
+        from app.config import get_apps_config
+        current_config = get_apps_config()
+        
         apps_list = []
-        for key, config in APPS_CONFIG.items():
+        for key, config in current_config.items():
             apps_list.append({
                 "key": key,
-                "name": config.get("name", key)
+                "name": config.get("name", key),
+                # Extra fields for Custom Scan autofill
+                "base_url": config.get("base_url", ""),
+                "login_path": config.get("login_path", "/login"),
+                "logs_path": config.get("logs_path", "/logs"),
+                "username": config.get("username", "") # Safe for admin
             })
         logger.info(f"Returning {len(apps_list)} apps")
         return jsonify(apps_list), 200
@@ -36,16 +45,18 @@ def get_apps():
 
 # Debug endpoint (no auth) for testing
 @stats_bp.route('/debug/apps', methods=['GET'])
-def debug_apps():
-    """Debug endpoint without JWT to verify config is loaded."""
+def debug_apps_list():
+    """Debug endpoint to list available apps (Dynamic)."""
     try:
-        apps_list = []
-        for key, config in APPS_CONFIG.items():
-            apps_list.append({
-                "key": key,
-                "name": config.get("name", key)
-            })
-        return jsonify({"status": "ok", "count": len(apps_list), "apps": apps_list}), 200
+        # Reload config dynamically
+        from app.config import get_apps_config
+        current_config = get_apps_config()
+        
+        return jsonify({
+            "status": "ok",
+            "count": len(current_config),
+            "apps": [{"key": k, "name": v.get("name", k)} for k, v in current_config.items()]
+        })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -83,7 +94,11 @@ def get_app_stats_logic(app_key, date_str):
     except ValueError:
         return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
     
-    if app_key not in APPS_CONFIG:
+    # Reload config dynamically to ensure new apps are found
+    from app.config import get_apps_config
+    current_config = get_apps_config()
+    
+    if app_key not in current_config:
         return jsonify({"error": "App not found"}), 404
 
     # Try real-time scraping first
@@ -451,9 +466,9 @@ def send_error_email_endpoint():
 @jwt_required()
 def scan_adhoc():
     """
-    Ad-hoc scan endpoint: accepts URL, credentials, and date to scan any application on-demand.
-    Returns same format as regular stats endpoints (logs + controlled).
+    Realiza un escaneo bajo demanda para una aplicación no registrada.
     """
+    logger.info("⚡ RECEIVED SCAN-ADHOC REQUEST")
     try:
         data = request.get_json()
         

@@ -10,40 +10,43 @@ from . import apps_manager_bp
 from .services import AppManagerService
 
 
-@apps_manager_bp.route('/', methods=['GET'])
-@jwt_required()
-def list_apps():
-    """
-    List all monitored applications.
-    Returns apps without plaintext passwords for security.
-    """
-    try:
-        apps = AppManagerService.list_apps()
-        logger.info(f"Listing {len(apps)} apps")
-        return jsonify(apps), 200
-    except Exception as e:
-        logger.error(f"Error listing apps: {e}")
-        return jsonify({"error": str(e)}), 500
+# COMENTADO POR SOLICITUD DE USUARIO - La gestión de apps ahora se hace vía Custom Scan
+# NOTA: Descomentar para habilitar el API si Custom Scan necesita guardar cambios.
 
-
-@apps_manager_bp.route('/<int:app_id>', methods=['GET'])
-@jwt_required()
-def get_app(app_id):
-    """
-    Get a single app by ID.
-    """
-    try:
-        app = AppManagerService.get_app(app_id, include_credentials=False)
-        
-        if not app:
-            return jsonify({"error": "App not found"}), 404
-        
-        return jsonify(app), 200
-    except Exception as e:
-        logger.error(f"Error getting app {app_id}: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
+# @apps_manager_bp.route('/', methods=['GET'])
+# @jwt_required()
+# def list_apps():
+#     """
+#     List all monitored applications.
+#     Returns apps without plaintext passwords for security.
+#     """
+#     try:
+#         apps = AppManagerService.list_apps()
+#         logger.info(f"Listing {len(apps)} apps")
+#         return jsonify(apps), 200
+#     except Exception as e:
+#         logger.error(f"Error listing apps: {e}")
+#         return jsonify({"error": str(e)}), 500
+# 
+# 
+# @apps_manager_bp.route('/<int:app_id>', methods=['GET'])
+# @jwt_required()
+# def get_app(app_id):
+#     """
+#     Get a single app by ID.
+#     """
+#     try:
+#         app = AppManagerService.get_app(app_id, include_credentials=False)
+#         
+#         if not app:
+#             return jsonify({"error": "App not found"}), 404
+#         
+#         return jsonify(app), 200
+#     except Exception as e:
+#         logger.error(f"Error getting app {app_id}: {e}")
+#         return jsonify({"error": str(e)}), 500
+# 
+# 
 @apps_manager_bp.route('/', methods=['POST'])
 @jwt_required()
 @admin_required
@@ -51,18 +54,6 @@ def create_app():
     """
     Create a new monitored application.
     Requires admin privileges.
-    
-    Expected JSON body:
-    {
-        "app_key": "unique_key",
-        "app_name": "Display Name",
-        "base_url": "https://example.com",
-        "login_path": "/login",  # Optional
-        "logs_path": "/logs",     # Optional
-        "username": "user",
-        "password": "pass",
-        "is_active": true         # Optional
-    }
     """
     try:
         data = request.get_json()
@@ -81,113 +72,92 @@ def create_app():
     except Exception as e:
         logger.error(f"Error creating app: {e}")
         return jsonify({"error": str(e)}), 500
-
-
-@apps_manager_bp.route('/<int:app_id>', methods=['PUT'])
-@jwt_required()
-@admin_required
-def update_app(app_id):
-    """
-    Update an existing app.
-    Requires admin privileges.
-    
-    Expected JSON body (all fields optional):
-    {
-        "app_name": "New Name",
-        "base_url": "https://newurl.com",
-        "login_path": "/new-login",
-        "logs_path": "/new-logs",
-        "username": "newuser",
-        "password": "newpass",
-        "is_active": false
-    }
-    """
-    try:
-        data = request.get_json()
-        
-        if not data:
-            return jsonify({"error": "No data provided"}), 400
-        
-        app = AppManagerService.update_app(app_id, data)
-        logger.info(f"App updated: {app['app_key']}")
-        
-        return jsonify(app), 200
-        
-    except ValueError as e:
-        logger.warning(f"Validation error updating app: {e}")
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        logger.error(f"Error updating app: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-@apps_manager_bp.route('/<int:app_id>', methods=['DELETE'])
-@jwt_required()
-@admin_required
-def delete_app(app_id):
-    """
-    Delete an app.
-    Requires admin privileges.
-    """
-    try:
-        AppManagerService.delete_app(app_id)
-        logger.info(f"App deleted: {app_id}")
-        
-        return jsonify({"message": "App deleted successfully"}), 200
-        
-    except ValueError as e:
-        logger.warning(f"App not found for deletion: {app_id}")
-        return jsonify({"error": str(e)}), 404
-    except Exception as e:
-        logger.error(f"Error deleting app: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-@apps_manager_bp.route('/<int:app_id>/scan', methods=['POST'])
-@jwt_required()
-@admin_required
-def scan_app(app_id):
-    """
-    Trigger on-demand scraping for a specific app.
-    Requires admin privileges.
-    
-    Expected JSON body (optional):
-    {
-        "date": "2026-01-06"  # YYYY-MM-DD format, defaults to today
-    }
-    """
-    try:
-        data = request.get_json() or {}
-        date_str = data.get('date')
-        
-        result = AppManagerService.scan_app(app_id, date_str)
-        logger.info(f"Scan triggered for app {app_id}")
-        
-        return jsonify(result), 200
-        
-    except ValueError as e:
-        logger.warning(f"Validation error scanning app: {e}")
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        logger.error(f"Error scanning app: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-@apps_manager_bp.route('/export-config', methods=['GET'])
-@jwt_required()
-@admin_required
-def export_config():
-    """
-    Export all active apps in APPS_CONFIG format.
-    Useful for debugging or migration.
-    Requires admin privileges.
-    """
-    try:
-        config = AppManagerService.export_to_legacy_format()
-        logger.info("Config exported successfully")
-        
-        return jsonify(config), 200
-        
-    except Exception as e:
-        logger.error(f"Error exporting config: {e}")
-        return jsonify({"error": str(e)}), 500
+# 
+# 
+# @apps_manager_bp.route('/<int:app_id>', methods=['PUT'])
+# @jwt_required()
+# @admin_required
+# def update_app(app_id):
+#     """
+#     Update an existing app.
+#     """
+#     try:
+#         data = request.get_json()
+#         
+#         if not data:
+#             return jsonify({"error": "No data provided"}), 400
+#         
+#         app = AppManagerService.update_app(app_id, data)
+#         logger.info(f"App updated: {app['app_key']}")
+#         
+#         return jsonify(app), 200
+#         
+#     except ValueError as e:
+#         logger.warning(f"Validation error updating app: {e}")
+#         return jsonify({"error": str(e)}), 400
+#     except Exception as e:
+#         logger.error(f"Error updating app: {e}")
+#         return jsonify({"error": str(e)}), 500
+# 
+# 
+# @apps_manager_bp.route('/<int:app_id>', methods=['DELETE'])
+# @jwt_required()
+# @admin_required
+# def delete_app(app_id):
+#     """
+#     Delete an app.
+#     """
+#     try:
+#         AppManagerService.delete_app(app_id)
+#         logger.info(f"App deleted: {app_id}")
+#         
+#         return jsonify({"message": "App deleted successfully"}), 200
+#         
+#     except ValueError as e:
+#         logger.warning(f"App not found for deletion: {app_id}")
+#         return jsonify({"error": str(e)}), 404
+#     except Exception as e:
+#         logger.error(f"Error deleting app: {e}")
+#         return jsonify({"error": str(e)}), 500
+# 
+# 
+# @apps_manager_bp.route('/<int:app_id>/scan', methods=['POST'])
+# @jwt_required()
+# @admin_required
+# def scan_app(app_id):
+#     """
+#     Trigger on-demand scraping for a specific app.
+#     """
+#     try:
+#         data = request.get_json() or {}
+#         date_str = data.get('date')
+#         
+#         result = AppManagerService.scan_app(app_id, date_str)
+#         logger.info(f"Scan triggered for app {app_id}")
+#         
+#         return jsonify(result), 200
+#         
+#     except ValueError as e:
+#         logger.warning(f"Validation error scanning app: {e}")
+#         return jsonify({"error": str(e)}), 400
+#     except Exception as e:
+#         logger.error(f"Error scanning app: {e}")
+#         return jsonify({"error": str(e)}), 500
+# 
+# 
+# @apps_manager_bp.route('/export-config', methods=['GET'])
+# @jwt_required()
+# @admin_required
+# def export_config():
+#     """
+#     Export all active apps in APPS_CONFIG format.
+#     """
+#     try:
+#         config = AppManagerService.export_to_legacy_format()
+#         logger.info("Config exported successfully")
+#         
+#         return jsonify(config), 200
+#         
+#     except Exception as e:
+#         logger.error(f"Error exporting config: {e}")
+#         return jsonify({"error": str(e)}), 500

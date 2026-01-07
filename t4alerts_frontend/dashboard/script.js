@@ -120,6 +120,8 @@ class StatsManager {
         this.feedContainer.style.display = 'none'; // Hide feed when viewing specific app
         const historyView = document.getElementById('view-error-history');
         if (historyView) historyView.style.display = 'none';
+        const customScanView = document.getElementById('custom-scan-view');
+        if (customScanView) customScanView.style.display = 'none';
 
         this.appViewContainer.style.display = 'block';
 
@@ -140,6 +142,8 @@ class StatsManager {
         this.dashboardOverview.style.display = 'block';
         this.feedContainer.style.display = 'block';
         this.appViewContainer.style.display = 'none';
+        const customScanView = document.getElementById('custom-scan-view');
+        if (customScanView) customScanView.style.display = 'none';
     }
 
     async loadAppStats(appKey) {
@@ -155,17 +159,26 @@ class StatsManager {
             //     headers: { 'Authorization': `Bearer ${token}` }
             // });
 
-            // Using debug endpoint (no auth needed)
-            const baseUrl = 'http://localhost:5001/api/stats/debug/view';
+            // Use authenticated endpoint via Config
+            const endpoint = `${window.T4Config.getEndpoint('stats_view')}/${appKey}`;
+            const token = localStorage.getItem('t4_access_token');
             const startTime = Date.now();
 
-            const response = await fetch(`${baseUrl}/${appKey}?date=${this.currentDate}`);
+            const response = await fetch(`${endpoint}?date=${this.currentDate}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
 
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
             console.log(`⏱️ Scraping took ${elapsed} seconds`);
 
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                // Try to parse error message explicitly
+                const errText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errText}`);
             }
 
             const data = await response.json();
@@ -206,7 +219,9 @@ class StatsManager {
             this.renderStatsChart(data.stats);
         } catch (error) {
             console.error('❌ Stats load error:', error);
-            T4Logger.error("Failed to load app stats", error);
+            if (window.T4Logger) {
+                window.T4Logger.error("Failed to load app stats", error);
+            }
             document.getElementById('logs-uncontrolled').innerHTML =
                 `<div style="color: red; padding: 20px;">
                     <strong>Error loading stats</strong><br>
@@ -1079,6 +1094,7 @@ window.sendErrorEmail = window.openEmailModal;
 
 // ===== CUSTOM SCAN HANDLER =====
 document.addEventListener('DOMContentLoaded', () => {
+    // 1. Handling Custom Scan Form Submission
     const customScanForm = document.getElementById('custom-scan-form');
     if (customScanForm) {
         customScanForm.addEventListener('submit', async (e) => {
@@ -1086,7 +1102,132 @@ document.addEventListener('DOMContentLoaded', () => {
             await executeCustomScan();
         });
     }
+
+    // 2. Handling Template Loader
+    const templateSelect = document.getElementById('scan-template');
+    if (templateSelect) {
+        // Populate on load
+        populateTemplates(templateSelect);
+
+        templateSelect.addEventListener('change', (e) => {
+            const index = e.target.selectedIndex;
+            if (index > 0) { // 0 is default option
+                // The data is stored in the option element
+                const option = e.target.options[index];
+                const appData = JSON.parse(option.dataset.app);
+                fillCustomScanForm(appData);
+            }
+        });
+    }
+
+    // 3. Handling Save App Button
+    const saveBtn = document.getElementById('btn-save-app');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', saveCurrentAppConfig);
+    }
 });
+
+async function populateTemplates(selectElement) {
+    try {
+        const token = localStorage.getItem('t4_access_token');
+        if (!token) return;
+
+        const response = await fetch(`${window.T4Config.API_BASE_URL}/stats/apps`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const apps = await response.json();
+
+        if (Array.isArray(apps)) {
+            apps.forEach(app => {
+                const opt = document.createElement('option');
+                opt.value = app.key;
+                opt.innerText = app.name;
+                // Store full config in dataset for easy retrieval (excluding password which isn't sent)
+                opt.dataset.app = JSON.stringify(app);
+                selectElement.appendChild(opt);
+            });
+        }
+    } catch (e) {
+        console.error("Failed to load templates", e);
+    }
+}
+
+function fillCustomScanForm(app) {
+    document.getElementById('scan-base-url').value = app.base_url || '';
+    document.getElementById('scan-login-path').value = app.login_path || '/login';
+    document.getElementById('scan-logs-path').value = app.logs_path || '/logs';
+    document.getElementById('scan-username').value = app.username || '';
+    // Password is intentionally left blank for security re-entry or because it's not available
+    document.getElementById('scan-app-name').value = app.name || '';
+}
+
+async function saveCurrentAppConfig() {
+    const btn = document.getElementById('btn-save-app');
+    const originalText = btn.innerText;
+    btn.disabled = true;
+    btn.innerText = 'Saving...';
+
+    const appName = document.getElementById('scan-app-name').value.trim() || 'Custom App ' + new Date().toISOString();
+
+    // Generate simple key from name
+    const appKey = appName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+
+    const payload = {
+        app_key: appKey,
+        app_name: appName,
+        base_url: document.getElementById('scan-base-url').value.trim(),
+        login_path: document.getElementById('scan-login-path').value.trim(),
+        logs_path: document.getElementById('scan-logs-path').value.trim(),
+        username: document.getElementById('scan-username').value.trim(),
+        password: document.getElementById('scan-password').value,
+        is_active: true
+    };
+
+    if (!payload.password) {
+        alert("Please enter a password to save this application.");
+        btn.disabled = false;
+        btn.innerText = originalText;
+        return;
+    }
+
+    try {
+        const token = localStorage.getItem('t4_access_token');
+        // Add trailing slash to avoid 308 Redirect which fails CORS preflight
+        const response = await fetch(`${window.T4Config.API_BASE_URL}/apps/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const resData = await response.json();
+        if (response.ok) {
+            alert('App saved successfully! Reloading menu...');
+
+            // Reload menu
+            if (window.statsManager) {
+                await window.statsManager.loadAppsList();
+                // Select the new app
+                // We need to know the new key. Usually derived from name.
+                // Assuming backend returns it or we can guess.
+                // Backend creates key from name (slugified).
+                // Let's just go to overview or try to find it.
+                // Or simply reload page to be safe.
+                window.location.reload();
+            }
+        } else {
+            alert('Error saving app: ' + (resData.error || 'Unknown error'));
+        }
+    } catch (e) {
+        console.error("Save error:", e);
+        alert('Failed to save app.');
+    } finally {
+        btn.disabled = false;
+        btn.innerText = originalText;
+    }
+}
 
 async function executeCustomScan() {
     const btn = document.getElementById('btn-start-scan');
@@ -1151,58 +1292,79 @@ async function executeCustomScan() {
 }
 
 function renderCustomScanResults(data) {
-    const resultsContainer = document.getElementById('custom-scan-results');
+    const resultsWrapper = document.getElementById('custom-scan-results');
+    const contentContainer = document.getElementById('scan-results-content');
+    const saveBtn = document.getElementById('btn-save-app');
 
     // Clear previous results
-    resultsContainer.innerHTML = '<h3>Scan Results</h3>';
+    if (contentContainer) contentContainer.innerHTML = '';
+    else if (resultsWrapper) resultsWrapper.innerHTML = ''; // Fallback if HTML not updated yet
 
-    // Create containers for each error type
-    const uncontrolledContainer = document.createElement('div');
-    uncontrolledContainer.className = 'error-section';
-    uncontrolledContainer.innerHTML = '<h4>Errors</h4>';
+    // Show save button
+    if (saveBtn) saveBtn.style.display = 'block';
 
-    const controlledContainer = document.createElement('div');
-    controlledContainer.className = 'error-section';
-    controlledContainer.innerHTML = '<h4>Errors (controlled)</h4>';
+    // Create main grid container to match app view
+    const gridContainer = document.createElement('div');
+    gridContainer.className = 'logs-grid';
 
-    // Render uncontrolled errors
+    // --- Uncontrolled Section ---
+    const uncontrolledGroup = document.createElement('div');
+    uncontrolledGroup.className = 'log-group uncontrolled';
+
+    const unHeader = document.createElement('h3');
+    unHeader.innerText = 'Errors';
+    uncontrolledGroup.appendChild(unHeader);
+
+    const uncontrolledList = document.createElement('div');
+    uncontrolledList.className = 'log-list';
+
     if (data.logs && data.logs.length > 0) {
-        const uncontrolledList = document.createElement('div');
-        uncontrolledList.className = 'logs-list';
         data.logs.forEach(logStr => {
-            // Convert string to object expected by createAccordionLogItem
             const logObj = {
                 message: logStr,
                 count: 1,
-                timestamp: '' // Function will extract timestamp from message
+                timestamp: ''
             };
             uncontrolledList.appendChild(window.createAccordionLogItem(logObj, false));
         });
-        uncontrolledContainer.appendChild(uncontrolledList);
     } else {
-        uncontrolledContainer.innerHTML += '<p>No uncontrolled errors found ✅</p>';
+        uncontrolledList.innerHTML = '<div class="log-item">No uncontrolled errors found ✅</div>';
     }
+    uncontrolledGroup.appendChild(uncontrolledList);
 
-    // Render controlled errors
+
+    // --- Controlled Section ---
+    const controlledGroup = document.createElement('div');
+    controlledGroup.className = 'log-group controlled';
+
+    const conHeader = document.createElement('h3');
+    conHeader.innerText = 'Errors (controlled)';
+    controlledGroup.appendChild(conHeader);
+
+    const controlledList = document.createElement('div');
+    controlledList.className = 'log-list';
+
     if (data.controlled && data.controlled.length > 0) {
-        const controlledList = document.createElement('div');
-        controlledList.className = 'logs-list';
         data.controlled.forEach(logStr => {
-            // Convert string to object expected by createAccordionLogItem
             const logObj = {
                 message: logStr,
                 count: 1,
-                timestamp: '' // Function will extract timestamp from message
+                timestamp: ''
             };
             controlledList.appendChild(window.createAccordionLogItem(logObj, true));
         });
-        controlledContainer.appendChild(controlledList);
     } else {
-        controlledContainer.innerHTML += '<p>No controlled errors found ✅</p>';
+        controlledList.innerHTML = '<div class="log-item">No controlled errors found ✅</div>';
     }
+    controlledGroup.appendChild(controlledList);
 
-    resultsContainer.appendChild(uncontrolledContainer);
-    resultsContainer.appendChild(controlledContainer);
+    // Append groups to grid
+    gridContainer.appendChild(uncontrolledGroup);
+    gridContainer.appendChild(controlledGroup);
+
+    // Append grid to results
+    if (contentContainer) contentContainer.appendChild(gridContainer);
+    else if (resultsWrapper) resultsWrapper.appendChild(gridContainer);
 }
 
 window.executeCustomScan = executeCustomScan;

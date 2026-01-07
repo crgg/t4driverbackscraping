@@ -163,10 +163,28 @@
                 <p class="subtitle">Scan any application on-demand without configuration</p>
 
                 <form id="custom-scan-form" class="custom-scan-form">
+                    <!-- Template Loader -->
+                    <div class="form-row"
+                        style="margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 20px;">
+                        <div class="form-group">
+                            <label for="scan-template">📂 Load from existing app (Optional)</label>
+                            <select id="scan-template" class="dark-input">
+                                <option value="">-- Select an app to autofill --</option>
+                            </select>
+                        </div>
+                    </div>
+
                     <div class="form-row">
                         <div class="form-group">
                             <label for="scan-base-url">Base URL *</label>
                             <input type="url" id="scan-base-url" placeholder="https://example.com" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="scan-app-name">App Name (for saving later)</label>
+                            <input type="text" id="scan-app-name" placeholder="My New App">
                         </div>
                     </div>
 
@@ -208,8 +226,16 @@
 
                 <!-- Results Container -->
                 <div id="custom-scan-results" style="display: none; margin-top: 30px;">
-                    <h3>Scan Results</h3>
-                    <!-- Results will be injected here using existing renderLogs() -->
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3>Scan Results</h3>
+                        <button id="btn-save-app" class="btn-success"
+                            style="display: none; background: #28a745; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer;">
+                            💾 Save & Add to Menu
+                        </button>
+                    </div>
+                    <!-- Content will be injected into a new div -->
+                    <div id="scan-results-content"></div>
                 </div>
             </div>
 

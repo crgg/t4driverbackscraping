@@ -37,14 +37,16 @@ function setupMenuCards() {
     const errorsCard = document.getElementById('errorsCard');
 
     // Admin card - only for admins
-    if (PermissionManager.isAdmin()) {
+    if (adminCard && PermissionManager.isAdmin()) {
         adminCard.style.display = 'block';
         adminCard.onclick = () => {
             T4Logger.info("Navigating to admin panel");
             window.location.href = '/admin';
         };
+    }
 
-        // Apps Manager card - only for admins
+    // Apps Manager card - only for admins
+    if (appsCard && PermissionManager.isAdmin()) {
         appsCard.style.display = 'block';
         appsCard.onclick = () => {
             T4Logger.info("Navigating to app manager");
@@ -53,7 +55,7 @@ function setupMenuCards() {
     }
 
     // Certificates card - requires view_certificates permission
-    if (PermissionManager.hasPermission('view_certificates')) {
+    if (certificatesCard && PermissionManager.hasPermission('view_certificates')) {
         certificatesCard.style.display = 'block';
         certificatesCard.onclick = () => {
             T4Logger.info("Navigating to certificates");
@@ -62,7 +64,7 @@ function setupMenuCards() {
     }
 
     // Errors card - requires view_errors permission
-    if (PermissionManager.hasPermission('view_errors')) {
+    if (errorsCard && PermissionManager.hasPermission('view_errors')) {
         errorsCard.style.display = 'block';
         errorsCard.onclick = () => {
             T4Logger.info("Navigating to errors dashboard");
