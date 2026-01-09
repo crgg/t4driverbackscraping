@@ -37,9 +37,12 @@ class ViewFactory {
                 document.getElementById('custom-scan-view').style.display = 'block';
                 document.getElementById('page-title').innerText = 'Custom App Scan';
 
-                // Set default date to today
-                const today = new Date().toISOString().split('T')[0];
-                document.getElementById('scan-date').value = today;
+                // Set default date to today in the modal field
+                const modalDate = document.getElementById('m-scan-date');
+                if (modalDate) {
+                    const today = new Date().toISOString().split('T')[0];
+                    modalDate.value = today;
+                }
                 break;
             case 'errors':
                 window.location.href = '/errors';

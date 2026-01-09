@@ -157,85 +157,41 @@
                 </div>
             </div>
 
-            <!-- Custom Scan Form -->
+            <!-- Custom Scan Results View -->
             <div id="custom-scan-view" style="display: none;">
-                <h2>⚡ Custom App Scan</h2>
-                <p class="subtitle">Scan any application on-demand without configuration</p>
-
-                <form id="custom-scan-form" class="custom-scan-form">
-                    <!-- Template Loader -->
-                    <div class="form-row"
-                        style="margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 20px;">
-                        <div class="form-group">
-                            <label for="scan-template">📂 Load from existing app (Optional)</label>
-                            <select id="scan-template" class="dark-input">
-                                <option value="">-- Select an app to autofill --</option>
-                            </select>
-                        </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+                    <div>
+                        <h2>⚡ Custom App Scan</h2>
+                        <p class="subtitle">Results for your on-demand scan</p>
                     </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="scan-base-url">Base URL *</label>
-                            <input type="url" id="scan-base-url" placeholder="https://example.com" required>
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="scan-app-name">App Name (for saving later)</label>
-                            <input type="text" id="scan-app-name" placeholder="My New App">
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="scan-login-path">Login Path</label>
-                            <input type="text" id="scan-login-path" value="/login" placeholder="/login">
-                        </div>
-                        <div class="form-group">
-                            <label for="scan-logs-path">Logs Path</label>
-                            <input type="text" id="scan-logs-path" value="/logs" placeholder="/logs">
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="scan-username">Username *</label>
-                            <input type="text" id="scan-username" placeholder="Login username" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="scan-password">Password *</label>
-                            <input type="password" id="scan-password" placeholder="Login password" required>
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="scan-date">Scan Date</label>
-                            <input type="date" id="scan-date">
-                        </div>
-                    </div>
-
-                    <div class="form-actions">
-                        <button type="submit" class="btn-primary" id="btn-start-scan">
-                            🚀 Start Scan
-                        </button>
-                    </div>
-                </form>
+                    <button onclick="openCustomScanModal()" class="tab-btn active"
+                        style="border: 2px solid var(--neon-blue); border-radius: 8px; font-weight: bold;">
+                        + NEW SCAN
+                    </button>
+                </div>
 
                 <!-- Results Container -->
-                <div id="custom-scan-results" style="display: none; margin-top: 30px;">
+                <div id="custom-scan-results"
+                    style="display: none; background: var(--card-bg); border-radius: 12px; padding: 25px; border: 1px solid rgba(255,255,255,0.05);">
                     <div
-                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h3>Scan Results</h3>
-                        <button id="btn-save-app" class="btn-success"
-                            style="display: none; background: #28a745; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer;">
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px;">
+                        <h3 id="scan-results-title">Scan Results</h3>
+                        <button id="btn-save-app" class="btn-modal-save" style="display: none;">
                             💾 Save & Add to Menu
                         </button>
                     </div>
-                    <!-- Content will be injected into a new div -->
                     <div id="scan-results-content"></div>
+                </div>
+
+                <!-- Empty state if no scan yet -->
+                <div id="custom-scan-empty" style="text-align: center; padding: 100px 20px; color: #888;">
+                    <div style="font-size: 3rem; margin-bottom: 20px; opacity: 0.3;">🚀</div>
+                    <h3>Ready to scan?</h3>
+                    <p>Start a new scan to see logs and statistics for any application.</p>
+                    <button onclick="openCustomScanModal()" class="btn-modal-save"
+                        style="margin-top: 20px; width: auto; padding-left: 30px; padding-right: 30px;">
+                        Start Here
+                    </button>
                 </div>
             </div>
 
@@ -294,6 +250,83 @@
                 <button onclick="closeEmailModal()" class="btn-cancel">Cancel</button>
                 <button onclick="submitErrorEmail()" class="btn-send" id="btn-submit-email">Send Email</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Custom Scan Modal (PRD DESIGN) -->
+    <div id="custom-scan-modal" class="custom-modal-container" style="display: none;">
+        <div class="custom-modal-content">
+            <div class="custom-modal-header">
+                <h2>Add Application</h2>
+                <button class="close-modal" onclick="closeCustomScanModal()">&times;</button>
+            </div>
+
+            <form id="custom-modal-form" class="custom-modal-form">
+                <!-- App Key (Hidden from UI, auto-generated) -->
+                <div class="custom-form-group" style="display: none;">
+                    <label for="m-scan-app-key">App Key *</label>
+                    <input type="text" id="m-scan-app-key" class="custom-modal-input" placeholder="p.ej. my_app_key"
+                        required>
+                </div>
+
+                <!-- App Name -->
+                <div class="custom-form-group">
+                    <label for="m-scan-app-name">App Name *</label>
+                    <input type="text" id="m-scan-app-name" class="custom-modal-input"
+                        placeholder="p.ej. My New Application" required>
+                </div>
+
+                <!-- Base URL -->
+                <div class="custom-form-group">
+                    <label for="m-scan-base-url">Base URL *</label>
+                    <input type="url" id="m-scan-base-url" class="custom-modal-input" placeholder="https://example.com"
+                        required>
+                </div>
+
+                <!-- Login & Logs Path Row -->
+                <div class="custom-form-row">
+                    <div class="custom-form-group">
+                        <label for="m-scan-login-path">Login Path</label>
+                        <input type="text" id="m-scan-login-path" class="custom-modal-input" value="/login">
+                    </div>
+                    <div class="custom-form-group">
+                        <label for="m-scan-logs-path">Logs Path</label>
+                        <input type="text" id="m-scan-logs-path" class="custom-modal-input" value="/logs">
+                    </div>
+                </div>
+
+                <!-- Username & Password Row -->
+                <div class="custom-form-row">
+                    <div class="custom-form-group">
+                        <label for="m-scan-username">Username *</label>
+                        <input type="text" id="m-scan-username" class="custom-modal-input" placeholder="Username"
+                            required>
+                    </div>
+                    <div class="custom-form-group">
+                        <label for="m-scan-password">Password *</label>
+                        <input type="password" id="m-scan-password" class="custom-modal-input" placeholder="Password"
+                            required minlength="4">
+                    </div>
+                </div>
+
+                <!-- Checkbox (Hidden from UI, active by default) -->
+                <div class="custom-checkbox-container" id="m-active-container" style="display: none;">
+                    <input type="checkbox" id="m-scan-active" checked>
+                    <span>Active (monitor this app)</span>
+                </div>
+
+                <!-- Scan Date (Extra, useful for the flow) -->
+                <div class="custom-form-group"
+                    style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
+                    <label for="m-scan-date">Initial Scan Date (Optional)</label>
+                    <input type="date" id="m-scan-date" class="custom-modal-input">
+                </div>
+
+                <div class="custom-modal-footer">
+                    <button type="button" class="btn-modal-cancel" onclick="closeCustomScanModal()">Cancel</button>
+                    <button type="submit" class="btn-modal-save" id="btn-modal-start">🚀 Start Scan</button>
+                </div>
+            </form>
         </div>
     </div>
 

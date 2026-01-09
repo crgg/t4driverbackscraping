@@ -1,14 +1,16 @@
 import sys
 import os
 
-# Add the parent directory to sys.path to allow absolute imports to work
-# even when running this script directly from the subdirectory.
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add the project root to sys.path to find core modules (app, db, etc.)
+# If running from /Users/administrator/Desktop/scrapping_project/t4alerts_backend/app.py
+# then 1st dirname is t4alerts_backend, 2nd dirname is project root.
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
 
 from dotenv import load_dotenv
 # Load environment variables from the root .env file
-root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-load_dotenv(os.path.join(root_dir, '.env'))
+load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 from flask import Flask
 from flask_cors import CORS

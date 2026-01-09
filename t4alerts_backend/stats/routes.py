@@ -24,7 +24,7 @@ def get_apps():
     try:
         # Reload config dynamically to include any newly added apps in DB
         from app.config import get_apps_config
-        current_config = get_apps_config()
+        current_config = get_apps_config(dynamic_only=True)
         
         apps_list = []
         for key, config in current_config.items():
@@ -50,7 +50,7 @@ def debug_apps_list():
     try:
         # Reload config dynamically
         from app.config import get_apps_config
-        current_config = get_apps_config()
+        current_config = get_apps_config(dynamic_only=True)
         
         return jsonify({
             "status": "ok",
@@ -96,7 +96,7 @@ def get_app_stats_logic(app_key, date_str):
     
     # Reload config dynamically to ensure new apps are found
     from app.config import get_apps_config
-    current_config = get_apps_config()
+    current_config = get_apps_config(dynamic_only=True)
     
     if app_key not in current_config:
         return jsonify({"error": "App not found"}), 404

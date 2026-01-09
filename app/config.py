@@ -16,65 +16,75 @@ KEYWORDS_NO_CONTROLADO = [
 # === CONFIGURACIÓN DE MÚLTIPLES APLICACIONES ===
 # Estructura: {clave_aplicacion: {config_dict}}
 
-# LEGACY: Hardcoded configuration (used as fallback)
-# Comentado para que la lista inicie vacía y se llene dinámicamente desde Custom Scan
+# LEGACY: Hardcoded configuration (used for main.py automated tasks)
 APPS_CONFIG_LEGACY: Dict[str, Dict] = {
-    # "driverapp_goto": {
-    #     "name": "DRIVERAPP - GO 2 LOGISTICS",
-    #     "base_url": "https://driverapp.goto-logistics.com",
-    #     "login_path": "/login",
-    #     "logs_path": "/logs",
-    #     "username_env": "DRIVERAPP_USER",
-    #     "password_env": "DRIVERAPP_PASS",
-    # },
-    # "goexperior": {
-    #     "name": "DRIVERAPP - GOEXPERIOR",
-    #     "base_url": "https://driverapp.goexperior.com",
-    #     "login_path": "/login",
-    #     "logs_path": "/logs",
-    #     "username_env": "GOEXPERIOR_USER",
-    #     "password_env": "GOEXPERIOR_PASS",
-    # },
-    # "klc": {
-    #     "name": "T4APP - KLC",
-    #     "base_url": "https://klc.t4app.com",
-    #     "login_path": "/login",
-    #     "logs_path": "/logs",
-    #     "username_env": "KLC_USER",
-    #     "password_env": "KLC_PASS",
-    # },
-    # "accuratecargo": {
-    #     "name": "T4APP - ACCURATECARGO",
-    #     "base_url": "https://accuratecargo.t4app.com",
-    #     "login_path": "/login",
-    #     "logs_path": "/logs",
-    #     "username_env": "ACCURATECARGO_USER",
-    #     "password_env": "ACCURATECARGO_PASS",
-    # },
-    # "broker_goto": {
-    #     "name": "BROKERAPP - GO 2 LOGISTICS",
-    #     "base_url": "https://broker.goto-logistics.com",
-    #     "login_path": "/login",
-    #     "logs_path": "/logs",
-    #     "username_env": "BROKER_GOTO_USER",
-    #     "password_env": "BROKER_GOTO_PASS",
-    # },
-    # "klc_crossdock": {
-    #     "name": "CROSSDOCK - KLC",
-    #     "base_url": "https://klccrossdock.t4app.com",
-    #     "login_path": "/login",
-    #     "logs_path": "/logs",
-    #     "username_env": "KLC_CD_USER",
-    #     "password_env": "KLC_CD_PASSWORD",
-    # },
-    # "t4tms_backend": {
-    #     "name": "T4TMS - BACKEND",
-    #     "base_url": "https://backend.t4tms.us",
-    #     "login_path": "/logs",  # T4TMS uses HTTP Basic Auth directly on /logs
-    #     "logs_path": "/logs",
-    #     "username_env": "T4TMS_BACKEND_USER",
-    #     "password_env": "T4TMS_BACKEND_PASSWORD",
-    # },
+    "driverapp_goto": {
+        "name": "DRIVERAPP - GO 2 LOGISTICS",
+        "base_url": "https://driverapp.goto-logistics.com",
+        "login_path": "/login",
+        "logs_path": "/logs",
+        "username_env": "DRIVERAPP_USER",
+        "password_env": "DRIVERAPP_PASS",
+    },
+    "goexperior": {
+        "name": "DRIVERAPP - GOEXPERIOR",
+        "base_url": "https://driverapp.goexperior.com",
+        "login_path": "/login",
+        "logs_path": "/logs",
+        "username_env": "GOEXPERIOR_USER",
+        "password_env": "GOEXPERIOR_PASS",
+    },
+    "klc": {
+        "name": "T4APP - KLC",
+        "base_url": "https://klc.t4app.com",
+        "login_path": "/login",
+        "logs_path": "/logs",
+        "username_env": "KLC_USER",
+        "password_env": "KLC_PASS",
+    },
+    "accuratecargo": {
+        "name": "T4APP - ACCURATECARGO",
+        "base_url": "https://accuratecargo.t4app.com",
+        "login_path": "/login",
+        "logs_path": "/logs",
+        "username_env": "ACCURATECARGO_USER",
+        "password_env": "ACCURATECARGO_PASS",
+    },
+    "broker_goto": {
+        "name": "BROKERAPP - GO 2 LOGISTICS",
+        "base_url": "https://broker.goto-logistics.com",
+        "login_path": "/login",
+        "logs_path": "/logs",
+        "username_env": "BROKER_GOTO_USER",
+        "password_env": "BROKER_GOTO_PASS",
+    },
+    "klc_crossdock": {
+        "name": "CROSSDOCK - KLC",
+        "base_url": "https://klccrossdock.t4app.com",
+        "login_path": "/login",
+        "logs_path": "/logs",
+        "username_env": "KLC_CD_USER",
+        "password_env": "KLC_CD_PASSWORD",
+    },
+    "t4tms_backend": {
+        "name": "T4TMS - BACKEND",
+        "base_url": "https://backend.t4tms.us",
+        "login_path": "/logs",  # T4TMS uses HTTP Basic Auth directly on /logs
+        "logs_path": "/logs",
+        "username_env": "T4TMS_BACKEND_USER",
+        "password_env": "T4TMS_BACKEND_PASSWORD",
+    },
+}
+
+# Specific mapping for SMS notifications (prevent NameError)
+SMS_APP_NAMES = {
+    "driverapp_goto": "GOTO LOGISTICS",
+    "goexperior": "GOEXPERIOR",
+    "klc": "KLC",
+    "accuratecargo": "ACCURATE",
+    "broker_goto": "BROKER GOTO",
+    "klc_crossdock": "CROSSDOCK KLC",
+    "t4tms_backend": "T4TMS BACKEND"
 }
 
 
@@ -85,58 +95,61 @@ def get_apps_config_from_db() -> Dict[str, Dict]:
     """
     try:
         from t4alerts_backend.apps_manager.models import MonitoredApp
+        # Import moved to subfolder, we need to adjust sys.path or use relative
+        # But here we are in app/config.py, root of project.
+        # After restructuring, t4alerts_backend is in t4alerts_web/backend.
+        # We might need to adjust imports.
         return MonitoredApp.to_config_format()
     except Exception as e:
-        print(f"  ⚠️ Warning: Could not load apps from database: {e}")
+        # Silently fail if DB not found or model not accessible (e.g. main.py outside context)
         return {}
 
 
-def get_apps_config() -> Dict[str, Dict]:
+def get_apps_config(dynamic_only: bool = False) -> Dict[str, Dict]:
     """
-    Get app configuration with hybrid approach:
-    1. Try to load from database
-    2. If database has apps, merge with legacy config (DB takes precedence)
-    3. If database is empty or unavailable, use legacy hardcoded config
-    
-    This ensures backward compatibility while enabling dynamic configuration.
+    Get app configuration with modular approach:
+    - dynamic_only=True (Web): Returns ONLY apps from DB (saved via Custom Scan)
+    - dynamic_only=False (Automation): Returns legacy static apps + DB apps
     """
-    # Try database first
+    # 1. Load from DB
     db_config = get_apps_config_from_db()
     
-    if db_config:
-        # Database has apps - convert legacy format to match DB format
-        legacy_converted = {}
-        for app_key, config in APPS_CONFIG_LEGACY.items():
-            # Skip if already in database
-            if app_key in db_config:
-                continue
-            
-            # Convert legacy format (env vars) to direct credentials
-            username = os.getenv(config.get("username_env", ""))
-            password = os.getenv(config.get("password_env", ""))
-            
-            if username and password:
-                legacy_converted[app_key] = {
-                    "name": config["name"],
-                    "base_url": config["base_url"],
-                    "login_path": config["login_path"],
-                    "logs_path": config["logs_path"],
-                    "username": username,
-                    "password": password,
-                }
-        
-        # Merge: DB apps + legacy apps not in DB
-        merged = {**legacy_converted, **db_config}
-        print(f"  ✅ Loaded {len(db_config)} apps from database, {len(legacy_converted)} from legacy config")
-        return merged
+    # 2. If Web mode (dynamic only), return DB apps (or empty if none)
+    if dynamic_only:
+        if not db_config:
+            print("  ℹ️ Web Mode: No dynamic apps found in database.")
+        else:
+            print(f"  ✅ Web Mode: Loaded {len(db_config)} dynamic apps from database.")
+        return db_config
     
-    # Fallback: use legacy config with env vars
-    print(f"  ℹ️ Using legacy hardcoded config ({len(APPS_CONFIG_LEGACY)} apps)")
-    return APPS_CONFIG_LEGACY
+    # 3. Automation mode (CLI/Main.py): Merge legacy + DB
+    legacy_converted = {}
+    for app_key, config in APPS_CONFIG_LEGACY.items():
+        # Prefer DB version if app_key exists in both
+        if app_key in db_config:
+            continue
+        
+        # Resolve credentials from env
+        username = os.getenv(config.get("username_env", ""))
+        password = os.getenv(config.get("password_env", ""))
+        
+        if username and password:
+            legacy_converted[app_key] = {
+                "name": config["name"],
+                "base_url": config["base_url"],
+                "login_path": config["login_path"],
+                "logs_path": config["logs_path"],
+                "username": username,
+                "password": password,
+            }
+    
+    merged = {**legacy_converted, **db_config}
+    print(f"  ✅ Automation Mode: Loaded {len(merged)} total apps ({len(legacy_converted)} static, {len(db_config)} dynamic)")
+    return merged
 
 
-# Dynamic config - Initialize with legacy defaults safely
-# We avoid calling get_apps_config() at module level to prevent "working outside context" errors
+# Global default (Start empty or with legacy depending on context)
+# For CLI, we will call get_apps_config(dynamic_only=False) explicitly in main.py
 APPS_CONFIG = APPS_CONFIG_LEGACY.copy()
 
 
