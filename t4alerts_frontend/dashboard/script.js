@@ -150,8 +150,9 @@ class StatsManager {
             }
 
             const data = await response.json();
-            this.renderLogs(data.logs);
-            this.renderStatsChart(data.stats);
+            window.cachedLogs = data.logs;
+            window.cachedStats = data.stats;
+
         } catch (error) {
             console.error('❌ Stats load error:', error);
             document.getElementById('logs-uncontrolled').innerHTML =
@@ -159,8 +160,25 @@ class StatsManager {
                     <strong>Error loading stats</strong><br>
                     ${error.message}
                 </div>`;
+
         } finally {
             loadingEl.style.display = 'none';
+            // Always render logs immediately
+            this.renderLogs(window.cachedLogs || { uncontrolled: [], controlled: [] });
+
+            // Only render chart if Stats tab is currently visible
+            const statsView = document.getElementById('view-stats');
+            if (statsView && statsView.style.display !== 'none') {
+                // Wait for layout to fully stabilize before rendering chart
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        // Extra safety delay for complex layout changes
+                        setTimeout(() => {
+                            if (window.cachedStats) this.renderStatsChart(window.cachedStats);
+                        }, 50);
+                    });
+                });
+            }
         }
     }
 
@@ -280,7 +298,7 @@ class StatsManager {
         }
 
         if (window.currentSqlChart) window.currentSqlChart.destroy();
-        container.style.height = '650px';
+        container.style.height = '450px';
         container.innerHTML = '<canvas id="sqlChart"></canvas>';
         const ctx = document.getElementById('sqlChart').getContext('2d');
 
@@ -310,6 +328,15 @@ class StatsManager {
                 }
             }
         });
+
+        // Ensure it takes full size immediately
+        setTimeout(() => {
+            if (window.currentSqlChart) {
+                window.currentSqlChart.resize();
+                window.currentSqlChart.update();
+            }
+        }, 50);
+
         this.renderCustomLegend(labels, counts, colors);
     }
 
@@ -368,6 +395,24 @@ window.switchTab = function (tabName) {
     event.target.classList.add('active');
     document.getElementById('view-logs').style.display = tabName === 'logs' ? 'flex' : 'none';
     document.getElementById('view-stats').style.display = tabName === 'stats' ? 'grid' : 'none';
+
+    // When switching to stats, render or resize the chart
+    if (tabName === 'stats') {
+        // Use double RAF to ensure the display change has fully taken effect
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                if (window.cachedStats) {
+                    // If chart exists, resize it. Otherwise, create it.
+                    if (window.currentSqlChart) {
+                        window.currentSqlChart.resize();
+                        window.currentSqlChart.update();
+                    } else if (window.statsManager) {
+                        window.statsManager.renderStatsChart(window.cachedStats);
+                    }
+                }
+            });
+        });
+    }
 };
 
 class DashboardView {
@@ -381,23 +426,49 @@ class DashboardView {
 document.addEventListener('DOMContentLoaded', () => {
     const curDate = document.getElementById('current-date');
     if (curDate) curDate.innerText = new Date().toLocaleDateString();
+
+    // Update User Role in Sidebar
+    const roleDisplay = document.getElementById('user-role-display');
+    if (roleDisplay && window.PermissionManager) {
+        const role = window.PermissionManager.getRole();
+        roleDisplay.innerText = role.charAt(0).toUpperCase() + role.slice(1);
+    }
+
     new DashboardView().init();
 });
 
 // --- ERROR HISTORY ---
+// --- ERROR HISTORY ---
 window.historyData = [];
+window.historyPage = 1;
+window.historyPageSize = 20;
+window.historySearchTerm = '';
+
 window.loadErrorHistory = async function () {
     const list = document.getElementById('history-list');
     const load = document.getElementById('history-loading');
+    const pag = document.getElementById('history-pagination');
+
     list.innerHTML = '';
     load.style.display = 'block';
+    pag.style.display = 'none';
+
     try {
         const token = localStorage.getItem('t4_access_token');
-        const res = await fetch(`${window.T4Config.getEndpoint('error_history')}?limit=100`, { headers: { 'Authorization': `Bearer ${token}` } });
+        // Fetch up to 1000 records to allow decent client-side searching/paging
+        const res = await fetch(`${window.T4Config.getEndpoint('error_history')}?limit=1000`, { headers: { 'Authorization': `Bearer ${token}` } });
         window.historyData = await res.json();
+
         load.style.display = 'none';
-        if (window.historyData.length === 0) { list.innerHTML = '<div style="text-align:center; padding: 20px;">No errors found.</div>'; return; }
+
+        if (window.historyData.length === 0) {
+            list.innerHTML = '<div style="text-align:center; padding: 20px;">No errors found.</div>';
+            return;
+        }
+
+        pag.style.display = 'flex';
         renderHistory();
+
     } catch (err) {
         load.style.display = 'none';
         list.innerHTML = `<div style="color:red; padding:20px;">Error: ${err.message}</div>`;
@@ -411,11 +482,35 @@ window.sortHistory = function (col) {
     renderHistory();
 };
 
+window.filterHistory = function () {
+    const input = document.getElementById('history-search');
+    window.historySearchTerm = input.value.toLowerCase();
+    window.historyPage = 1; // Reset to first page on search
+    renderHistory();
+};
+
+window.changeHistoryPage = function (delta) {
+    window.historyPage += delta;
+    renderHistory();
+};
+
 window.renderHistory = function () {
     const list = document.getElementById('history-list');
+    const pageInfo = document.getElementById('history-page-info');
     list.innerHTML = '';
+
+    // 1. Filter
+    let filtered = window.historyData;
+    if (window.historySearchTerm) {
+        filtered = window.historyData.filter(item =>
+            (item.app_name && item.app_name.toLowerCase().includes(window.historySearchTerm)) ||
+            (item.error_content && item.error_content.toLowerCase().includes(window.historySearchTerm))
+        );
+    }
+
+    // 2. Sort
     const { col, asc } = window.historySort || { col: 'first_seen', asc: false };
-    window.historyData.sort((a, b) => {
+    filtered.sort((a, b) => {
         let vA = (a[col] || "").toString().toLowerCase();
         let vB = (b[col] || "").toString().toLowerCase();
         if (vA < vB) return asc ? -1 : 1;
@@ -423,7 +518,26 @@ window.renderHistory = function () {
         return 0;
     });
 
-    window.historyData.forEach(item => {
+    // 3. Paginate
+    const totalItems = filtered.length;
+    const totalPages = Math.ceil(totalItems / window.historyPageSize) || 1;
+
+    // Clamp page
+    if (window.historyPage < 1) window.historyPage = 1;
+    if (window.historyPage > totalPages) window.historyPage = totalPages;
+
+    pageInfo.innerText = `Page ${window.historyPage} of ${totalPages} (${totalItems} items)`;
+
+    const start = (window.historyPage - 1) * window.historyPageSize;
+    const end = start + window.historyPageSize;
+    const pageItems = filtered.slice(start, end);
+
+    if (pageItems.length === 0) {
+        list.innerHTML = '<div style="text-align:center; padding: 20px; color: #888;">No matching records found.</div>';
+        return;
+    }
+
+    pageItems.forEach(item => {
         const row = document.createElement('div');
         row.className = 'history-item';
         let d = item.first_seen;
@@ -444,25 +558,12 @@ window.renderHistory = function () {
     });
 };
 
-// --- SCAN ALL ---
-window.scanAllApps = async function () {
-    const status = document.getElementById('scan-status');
-    const date = document.getElementById('history-scan-date').value || new Date().toISOString().split('T')[0];
-    status.style.display = 'block';
-    status.innerText = '⚡ Scanning all apps...';
-    try {
-        const token = localStorage.getItem('t4_access_token');
-        const res = await fetch(window.T4Config.getEndpoint('error_history_scan'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ date })
-        });
-        const resData = await res.json();
-        if (!res.ok) throw new Error(resData.error || 'Scan failed');
-        status.innerText = `✅ Scan Complete! Refreshing...`;
-        setTimeout(() => window.loadErrorHistory(), 1000);
-    } catch (err) { status.innerText = `❌ Error: ${err.message}`; }
-};
+
+// REMOVED: scanAllApps() eliminada
+// Razón: El endpoint /api/error-history/scan fue eliminado del backend.
+// El error history se actualiza automáticamente cada vez que se hace scraping
+// desde custom-scan o desde errors/[app] individual.
+
 
 // --- EMAIL ---
 window.openEmailModal = function (event, timestamp, btn) {

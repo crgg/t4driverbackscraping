@@ -25,7 +25,7 @@
             <nav class="nav-menu">
                 <!-- Accordion: Statistics -->
                 <div class="accordion-header" id="accordion-stats" onclick="toggleAccordion('stats-content')">
-                    <span class="icon">📊</span> Statistics
+                    <span class="icon">📊</span> Logs / Stats
                     <span style="margin-left: auto; font-size: 0.8em;">▼</span>
                 </div>
                 <div id="stats-content" class="accordion-content">
@@ -50,7 +50,7 @@
             </nav>
 
             <div class="user-profile">
-                <div class="avatar">Admin</div>
+                <div class="avatar" id="user-role-display">Admin</div>
             </div>
         </aside>
 
@@ -66,19 +66,23 @@
             <!-- VIEW: Error History -->
             <div id="view-error-history" style="display: none;">
 
-                <div class="date-selector" style="justify-content: space-between; margin-bottom: 20px;">
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <label>Scan Date:</label>
-                        <input type="date" id="history-scan-date" value="">
-                        <button class="tab-btn active" style="border: 1px solid var(--neon-blue); border-radius: 4px;"
-                            onclick="scanAllApps()">
-                            ⚡ SCAN ALL APPS
-                        </button>
+
+                <div class="date-selector"
+                    style="justify-content: space-between; margin-bottom: 20px; align-items: flex-end;">
+                    <div
+                        style="padding: 12px 20px; background: rgba(0, 243, 255, 0.1); border-left: 3px solid var(--neon-blue); border-radius: 4px; color: #ccc; font-size: 0.9em; max-width: 60%;">
+                        💡 <strong>Tip:</strong> El historial se actualiza automáticamente cada vez que haces scraping
+                        desde <strong>Custom Scan</strong> o desde <strong>Logs/Stats</strong> de cada aplicación.
                     </div>
-                    <div id="scan-status" style="color: var(--neon-blue); font-size: 0.9em; display: none;">
-                        Scanning... please wait...
+
+                    <!-- Search Bar -->
+                    <div style="display: flex; flex-direction: column; gap: 5px;">
+                        <input type="text" id="history-search" placeholder="🔍 Search by app name..."
+                            onkeyup="filterHistory()"
+                            style="padding: 10px 15px; width: 250px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; outline: none;">
                     </div>
                 </div>
+
 
                 <div class="history-container">
                     <div class="history-header">
@@ -93,6 +97,17 @@
                     <div id="history-list" class="history-list">
                         <!-- Injected via script.js -->
                     </div>
+
+                    <!-- Pagination Controls -->
+                    <div id="history-pagination"
+                        style="display: none; justify-content: center; align-items: center; gap: 20px; padding: 20px; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.05);">
+                        <button onclick="changeHistoryPage(-1)" class="tab-btn" style="padding: 5px 15px;">&lt;
+                            Previous</button>
+                        <span id="history-page-info" style="color: #aaa; font-size: 0.9em;">Page 1</span>
+                        <button onclick="changeHistoryPage(1)" class="tab-btn" style="padding: 5px 15px;">Next
+                            &gt;</button>
+                    </div>
+
                     <div id="history-loading" style="text-align: center; padding: 20px; display: none; color: #888;">
                         Loading history...
                     </div>

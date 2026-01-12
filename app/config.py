@@ -88,6 +88,12 @@ SMS_APP_NAMES = {
 }
 
 
+# Caching for dynamic configurations
+_DYNAMIC_CACHE: Dict[str, Dict] = {}
+_LAST_CACHE_TIME = 0
+CACHE_TTL = 30  # seconds
+
+
 def get_apps_config_from_db() -> Dict[str, Dict]:
     """
     Load active apps from database.
@@ -105,30 +111,52 @@ def get_apps_config_from_db() -> Dict[str, Dict]:
         return {}
 
 
-def get_apps_config(dynamic_only: bool = False) -> Dict[str, Dict]:
+def get_apps_config(dynamic_only: bool = False, quiet: bool = False) -> Dict[str, Dict]:
     """
     Get app configuration with modular approach:
     - dynamic_only=True (Web): Returns ONLY apps from DB (saved via Custom Scan)
     - dynamic_only=False (Automation): Returns legacy static apps + DB apps
     """
-    # 1. Load from DB
-    db_config = get_apps_config_from_db()
+    global _DYNAMIC_CACHE, _LAST_CACHE_TIME
+    import time
     
-    # 2. If Web mode (dynamic only), return DB apps (or empty if none)
+    now = time.time()
+    
+    # 1. Use cache if valid (small TTL to allow nearly real-time updates)
+    if _DYNAMIC_CACHE and (now - _LAST_CACHE_TIME < CACHE_TTL):
+        return _DYNAMIC_CACHE if dynamic_only else {**_get_legacy_converted(), **_DYNAMIC_CACHE}
+
+    # 2. Load from DB
+    db_config = get_apps_config_from_db()
+    _DYNAMIC_CACHE = db_config
+    _LAST_CACHE_TIME = now
+    
+    # Update global reference for any direct access
+    global APPS_CONFIG
+    
+    # 3. If Web mode (dynamic only), return DB apps (or empty if none)
     if dynamic_only:
-        if not db_config:
-            print("  ℹ️ Web Mode: No dynamic apps found in database.")
-        else:
-            print(f"  ✅ Web Mode: Loaded {len(db_config)} dynamic apps from database.")
+        if db_config and not quiet:
+            print(f"  ✅ Config: Loaded {len(db_config)} dynamic apps from database.")
         return db_config
     
-    # 3. Automation mode (CLI/Main.py): Merge legacy + DB
+    # 4. Automation mode (CLI/Main.py): Merge legacy + DB
+    legacy_converted = _get_legacy_converted()
+    merged = {**legacy_converted, **db_config}
+    
+    if not quiet:
+        print(f"  ✅ Config: Loaded {len(merged)} total apps ({len(legacy_converted)} static, {len(db_config)} dynamic)")
+    
+    # Update global cache for performance
+    APPS_CONFIG.update(merged)
+    
+    return merged
+
+
+def _get_legacy_converted() -> Dict[str, Dict]:
+    """Helper to convert legacy config using env vars."""
     legacy_converted = {}
     for app_key, config in APPS_CONFIG_LEGACY.items():
-        # Prefer DB version if app_key exists in both
-        if app_key in db_config:
-            continue
-        
         # Resolve credentials from env
         username = os.getenv(config.get("username_env", ""))
         password = os.getenv(config.get("password_env", ""))
@@ -142,10 +170,7 @@ def get_apps_config(dynamic_only: bool = False) -> Dict[str, Dict]:
                 "username": username,
                 "password": password,
             }
-    
-    merged = {**legacy_converted, **db_config}
-    print(f"  ✅ Automation Mode: Loaded {len(merged)} total apps ({len(legacy_converted)} static, {len(db_config)} dynamic)")
-    return merged
+    return legacy_converted
 
 
 # Global default (Start empty or with legacy depending on context)
@@ -173,10 +198,14 @@ def get_app_credentials(app_key: str) -> tuple[str, str, str]:
     # If not found, try to load from DB dynamically (Context must be active)
     if not config:
         try:
-            current_config = get_apps_config()
+            # Try to fetch from DB without being noisy
+            current_config = get_apps_config(quiet=True)
             config = current_config.get(app_key)
-        except Exception as e:
-            print(f"⚠️ Warning: Failed to reload config dynamically: {e}")
+            if config:
+                # Cache it globally so we don't repeat this check
+                APPS_CONFIG[app_key] = config
+        except Exception:
+            pass
 
     if not config:
         raise ValueError(f"Aplicación '{app_key}' no encontrada en APPS_CONFIG ni DB")
@@ -222,10 +251,12 @@ def get_app_urls(app_key: str) -> tuple[str, str, str]:
     # Fallback to dynamic load if not in global config
     if not config:
         try:
-            current_config = get_apps_config()
+            current_config = get_apps_config(quiet=True)
             config = current_config.get(app_key)
-        except Exception as e:
-            print(f"⚠️ Warning: Failed to reload config dynamically in get_app_urls: {e}")
+            if config:
+                APPS_CONFIG[app_key] = config
+        except Exception:
+            pass
 
     if not config:
         raise ValueError(f"Aplicación '{app_key}' no encontrada en APPS_CONFIG ni DB")

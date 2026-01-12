@@ -33,7 +33,7 @@ def fetch_logs_html(session, fecha_str: str, app_key: str = "driverapp_goto") ->
     _, _, logs_url = get_app_urls(app_key)
 
     # 2) Cargamos la página principal de logs (lista de archivos)
-    resp_index = session.get(logs_url, timeout=30)
+    resp_index = session.get(logs_url, timeout=60)
     resp_index.raise_for_status()
     index_html = resp_index.text
 
@@ -99,7 +99,7 @@ def fetch_logs_html(session, fecha_str: str, app_key: str = "driverapp_goto") ->
     logs_day_url = urljoin(logs_url, href)
 
     # 3) Cargamos ahora SÍ el log correspondiente a esa fecha
-    resp_day = session.get(logs_day_url, timeout=30)
+    resp_day = session.get(logs_day_url, timeout=60)
     resp_day.raise_for_status()
     logs_html = resp_day.text
 

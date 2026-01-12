@@ -109,7 +109,7 @@ def _create_form_login_session(app_key: str, max_retries: int = 3) -> requests.S
     
     # Configuración de timeouts
     # (connect_timeout, read_timeout) en segundos
-    TIMEOUT = (10, 30)
+    TIMEOUT = (10, 60)
     
     # Configuración de retry con backoff exponencial
     retry_delays = [5, 10, 20]  # segundos entre intentos

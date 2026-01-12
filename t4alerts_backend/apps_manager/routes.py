@@ -4,7 +4,7 @@ Provides CRUD endpoints for monitored applications.
 """
 from flask import jsonify, request
 from flask_jwt_extended import jwt_required
-from t4alerts_backend.common.decorators import admin_required
+from t4alerts_backend.common.decorators import admin_required, permission_required
 from t4alerts_backend.common.utils import logger
 from . import apps_manager_bp
 from .services import AppManagerService
@@ -49,7 +49,7 @@ from .services import AppManagerService
 # 
 @apps_manager_bp.route('/', methods=['POST'])
 @jwt_required()
-@admin_required
+@permission_required('create_apps')
 def create_app():
     """
     Create a new monitored application.

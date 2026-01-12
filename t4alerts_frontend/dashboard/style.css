@@ -439,12 +439,22 @@ body {
 
 .stats-view .chart-card {
     max-height: 750px;
-    /* Much taller for prominent bars */
+    min-height: 500px;
+    height: 500px;
+    /* Reduced height for better proportions */
+    min-width: 0;
 }
 
 .stats-view .canvas-container {
-    height: 650px;
-    /* Significantly increased - bars will be very visible now */
+    height: 450px !important;
+    width: 100%;
+    position: relative;
+    min-width: 0;
+}
+
+.stats-view .canvas-container canvas {
+    height: 450px !important;
+    width: 100% !important;
 }
 
 @media (max-width: 768px) {
@@ -763,6 +773,7 @@ body {
     cursor: not-allowed;
     filter: grayscale(1);
 }
+
 /* === CUSTOM SCAN MODAL (PRD DESIGN) === */
 .custom-modal-container {
     position: fixed;
@@ -772,7 +783,8 @@ body {
     height: 100vh;
     background: rgba(0, 0, 0, 0.75);
     z-index: 2000;
-    display: none; /* Hidden by default */
+    display: none;
+    /* Hidden by default */
     justify-content: center;
     align-items: center;
     backdrop-filter: blur(8px);

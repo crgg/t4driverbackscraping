@@ -90,7 +90,7 @@ class MonitoredApp(db.Model):
         """
         try:
             apps = cls.query.filter_by(is_active=True).all()
-            logger.info(f"Retrieved {len(apps)} active apps")
+            logger.debug(f"Retrieved {len(apps)} active apps")
             return apps
         except SQLAlchemyError as e:
             logger.error(f"Database error retrieving active apps: {e}")
@@ -320,7 +320,7 @@ class MonitoredApp(db.Model):
                     "password": password,
                 }
             
-            logger.info(f"Generated config format for {len(config)} apps")
+            logger.debug(f"Generated config format for {len(config)} apps")
             return config
             
         except Exception as e:
