@@ -223,7 +223,18 @@ class StatsManager {
         const previewEl = document.createElement('div');
         previewEl.className = 'history-preview';
         previewEl.style.flex = '1';
-        previewEl.innerText = escapeHtml(log.message);
+
+        // Extract SQLSTATE for preview if it exists, otherwise show first 100 chars
+        const sqlstateMatch = (log.message || '').match(/SQLSTATE\[(\w+)\]/);
+        let previewText;
+        if (sqlstateMatch) {
+            previewText = `SQLSTATE[${sqlstateMatch[1]}]`;
+        } else {
+            // Show first 100 characters for non-SQL errors
+            previewText = (log.message || '').substring(0, 100);
+            if ((log.message || '').length > 100) previewText += '...';
+        }
+        previewEl.innerText = escapeHtml(previewText);
         if (isControlled) previewEl.style.color = '#aaa';
 
         const countEl = document.createElement('div');

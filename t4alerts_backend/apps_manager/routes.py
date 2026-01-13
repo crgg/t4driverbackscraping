@@ -49,7 +49,6 @@ from .services import AppManagerService
 # 
 @apps_manager_bp.route('/', methods=['POST'])
 @jwt_required()
-@permission_required('create_apps')
 def create_app():
     """
     Create a new monitored application.
