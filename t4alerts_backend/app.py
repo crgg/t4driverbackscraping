@@ -73,6 +73,14 @@ def create_app():
             print(f"⚠️ Warning: Could not initialize alerted_errors table: {e}")
             print("   The stats endpoint may fall back to reading .log files")
         
+        # Initialize error_history table for Error History view
+        try:
+            from db.error_history import init_error_history_db
+            init_error_history_db()
+            print("✅ Database initialized: error_history table ready")
+        except Exception as e:
+            print(f"⚠️ Warning: Could not initialize error_history table: {e}")
+        
         # Log that permissions system is ready
         print("✅ Permissions system initialized")
 

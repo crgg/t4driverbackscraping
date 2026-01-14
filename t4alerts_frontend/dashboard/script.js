@@ -468,12 +468,27 @@ window.loadErrorHistory = async function () {
         const token = localStorage.getItem('t4_access_token');
         // Fetch up to 1000 records to allow decent client-side searching/paging
         const res = await fetch(`${window.T4Config.getEndpoint('error_history')}?limit=1000`, { headers: { 'Authorization': `Bearer ${token}` } });
-        window.historyData = await res.json();
+
+        // Check if response is ok before parsing
+        if (!res.ok) {
+            throw new Error(`Server error: ${res.status} ${res.statusText}`);
+        }
+
+        const data = await res.json();
+
+        // Ensure data is an array
+        window.historyData = Array.isArray(data) ? data : [];
 
         load.style.display = 'none';
 
         if (window.historyData.length === 0) {
-            list.innerHTML = '<div style="text-align:center; padding: 20px;">No errors found.</div>';
+            list.innerHTML = `
+                <div style="text-align:center; padding: 40px; color: #888;">
+                    <div style="font-size: 48px; margin-bottom: 15px;">📭</div>
+                    <div style="font-size: 18px; font-weight: 500; margin-bottom: 8px;">No Error Records Stored</div>
+                    <div style="font-size: 14px;">Error history will appear here once you start scanning applications</div>
+                </div>
+            `;
             return;
         }
 
@@ -482,7 +497,14 @@ window.loadErrorHistory = async function () {
 
     } catch (err) {
         load.style.display = 'none';
-        list.innerHTML = `<div style="color:red; padding:20px;">Error: ${err.message}</div>`;
+        console.error('Error loading history:', err);
+        list.innerHTML = `
+            <div style="text-align:center; padding: 40px;">
+                <div style="font-size: 48px; margin-bottom: 15px;">⚠️</div>
+                <div style="color:#ff0055; font-size: 18px; font-weight: 500; margin-bottom: 8px;">Failed to Load Error History</div>
+                <div style="color: #888; font-size: 14px;">${err.message}</div>
+            </div>
+        `;
     }
 };
 
@@ -510,6 +532,12 @@ window.renderHistory = function () {
     const pageInfo = document.getElementById('history-page-info');
     list.innerHTML = '';
 
+    // Safety check: ensure historyData is an array
+    if (!Array.isArray(window.historyData)) {
+        console.warn('historyData is not an array, resetting to empty array');
+        window.historyData = [];
+    }
+
     // 1. Filter
     let filtered = window.historyData;
     if (window.historySearchTerm) {
@@ -519,15 +547,19 @@ window.renderHistory = function () {
         );
     }
 
-    // 2. Sort
+    // 2. Sort (with safety check)
     const { col, asc } = window.historySort || { col: 'first_seen', asc: false };
-    filtered.sort((a, b) => {
-        let vA = (a[col] || "").toString().toLowerCase();
-        let vB = (b[col] || "").toString().toLowerCase();
-        if (vA < vB) return asc ? -1 : 1;
-        if (vA > vB) return asc ? 1 : -1;
-        return 0;
-    });
+    if (Array.isArray(filtered)) {
+        filtered.sort((a, b) => {
+            let vA = (a[col] || "").toString().toLowerCase();
+            let vB = (b[col] || "").toString().toLowerCase();
+            if (vA < vB) return asc ? -1 : 1;
+            if (vA > vB) return asc ? 1 : -1;
+            return 0;
+        });
+    } else {
+        filtered = [];
+    }
 
     // 3. Paginate
     const totalItems = filtered.length;
@@ -764,4 +796,12 @@ function renderCustomScanResults(data) {
     grid.appendChild(createCol('Uncontrolled Errors', data.logs, false));
     grid.appendChild(createCol('Controlled Errors', data.controlled, true));
     cont.appendChild(grid);
+}
+
+/**
+ * Logout function
+ */
+function logout() {
+    localStorage.removeItem('t4_access_token');
+    window.location.href = '/login';
 }

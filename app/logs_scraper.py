@@ -28,7 +28,13 @@ def fetch_logs_html(session, fecha_str: str, app_key: str = "driverapp_goto") ->
     Hace dos pasos:
     1) GET /logs -> lista de archivos (laravel-YYYY-MM-DD.log y sus ?l=...)
     2) Busca el enlace correspondiente a la fecha pedida y hace GET a ese ?l=...
+    
+    NOTE: T4App Admin uses JSON API, handled separately.
     """
+    # Special handling for T4App which uses JSON API
+    if app_key == "t4app_admin":
+        return _fetch_logs_from_json_api(session, fecha_str, app_key)
+    
     # 1) Obtenemos la URL base de logs para esa app
     _, _, logs_url = get_app_urls(app_key)
 
@@ -108,6 +114,114 @@ def fetch_logs_html(session, fecha_str: str, app_key: str = "driverapp_goto") ->
     # debug_path.write_text(logs_html, encoding="utf-8")
 
     return logs_html
+
+
+def _fetch_logs_from_json_api(session, fecha_str: str, app_key: str) -> str:
+    """
+    Fetches logs from T4App Admin's API.
+    
+    T4App requires requesting HTML (not JSON) to get encrypted token links.
+    Each log file has a link like ?l=<encrypted_token> that must be followed.
+    """
+    from urllib.parse import urljoin
+    _, _, logs_url = get_app_urls(app_key)
+    
+    # Step 1: Get list of available log files as HTML (NOT JSON)
+    # We need to request HTML to get the encrypted token links
+    headers_html = {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    }
+    
+    resp_index = session.get(logs_url, headers=headers_html, timeout=60)
+    resp_index.raise_for_status()
+    
+    # Parse HTML to find log file links
+    soup = BeautifulSoup(resp_index.text, "html.parser")
+    
+    # Step 2: Find the log file link for the requested date
+    target_filename = f"laravel-{fecha_str}.log"
+    
+    # Search for the link with the target filename
+    link_tag = None
+    for a in soup.find_all('a', href=True):
+        text = a.get_text(strip=True)
+        if text == target_filename:
+            link_tag = a
+            break
+    
+    if link_tag is None:
+        # Try previous day as fallback
+        fecha_hoy = datetime.now().date()
+        fecha_solicitada_obj = datetime.strptime(fecha_str, "%Y-%m-%d").date()
+        
+        if fecha_solicitada_obj > fecha_hoy:
+            available_files = [a.get_text(strip=True) for a in soup.find_all('a', href=True) if '.log' in a.get_text()]
+            msg = (
+                f"⚠️ No se puede procesar fecha futura {fecha_str} en {app_key}. "
+                f"Archivos disponibles: {available_files}"
+            )
+            raise RuntimeError(msg)
+        
+        fecha_anterior_obj = fecha_solicitada_obj - timedelta(days=1)
+        fecha_anterior_str = fecha_anterior_obj.strftime("%Y-%m-%d")
+        target_filename_anterior = f"laravel-{fecha_anterior_str}.log"
+        
+        print(f"   ⚠️ No se encontró log para {fecha_str}, intentando con {fecha_anterior_str}...")
+        
+        for a in soup.find_all('a', href=True):
+            text = a.get_text(strip=True)
+            if text == target_filename_anterior:
+                link_tag = a
+                target_filename = target_filename_anterior
+                print(f"   ✓ Usando logs del día anterior ({fecha_anterior_str})")
+                break
+        
+        if link_tag is None:
+            # Check for stale logs
+            date_pattern = re.compile(r'laravel-(\d{4}-\d{2}-\d{2})\.log')
+            log_dates = []
+            for a in soup.find_all('a', href=True):
+                text = a.get_text(strip=True)
+                match = date_pattern.match(text)
+                if match:
+                    try:
+                        log_date = datetime.strptime(match.group(1), "%Y-%m-%d").date()
+                        log_dates.append(log_date)
+                    except ValueError:
+                        continue
+            
+            if log_dates:
+                most_recent = max(log_dates)
+                today = datetime.now().date()
+                days_old = (today - most_recent).days
+                
+                if days_old >= 2:
+                    available_files = [a.get_text(strip=True) for a in soup.find_all('a', href=True) if '.log' in a.get_text()]
+                    msg = (
+                        f"WARNING: Log files have not been created for two or more days in {app_key}. "
+                        f"Most recent log: {most_recent} ({days_old} days old). "
+                        f"Requested: {fecha_str}. Available files: {available_files}"
+                    )
+                    raise StaleLogsError(msg, app_key, fecha_str, days_old, most_recent)
+            
+            available_files = [a.get_text(strip=True) for a in soup.find_all('a', href=True) if '.log' in a.get_text()]
+            raise RuntimeError(f"No se encontró log para {fecha_str} ni para el día anterior en {app_key}. Archivos: {available_files}")
+    
+    # Step 3: Get the encrypted token from the link href
+    # href format: ?l=eyJpdiI6I...
+    href = link_tag.get('href') or ''
+    if not href.startswith('?l='):
+        raise RuntimeError(f"T4App Admin link format unexpected for {target_filename}: {href}")
+    
+    # Build full URL with the encrypted token
+    log_file_url = urljoin(logs_url, href)
+    
+    # Step 4: Fetch the specific log file content using the encrypted token
+    resp_content = session.get(log_file_url, headers=headers_html, timeout=60)
+    resp_content.raise_for_status()
+    
+    # Return the HTML (it returns rendered HTML table with log entries)
+    return resp_content.text
 
 
 def _get_most_recent_log_date(soup: BeautifulSoup) -> tuple:

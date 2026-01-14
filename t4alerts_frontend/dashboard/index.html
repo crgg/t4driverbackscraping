@@ -59,7 +59,10 @@
         <main class="main-content">
             <header class="top-bar">
                 <h1 id="page-title">Dashboard Overview</h1>
-                <div class="date-display" id="current-date">Loading date...</div>
+                <div style="display: flex; align-items: center; gap: 20px;">
+                    <div class="date-display" id="current-date">Loading date...</div>
+                    <button onclick="logout()" class="logout-btn-header">Logout</button>
+                </div>
             </header>
 
             <div id="loading" class="loading" style="display: none;">Fetching data...</div>

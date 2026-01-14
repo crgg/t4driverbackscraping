@@ -74,6 +74,15 @@ APPS_CONFIG_LEGACY: Dict[str, Dict] = {
         "username_env": "T4TMS_BACKEND_USER",
         "password_env": "T4TMS_BACKEND_PASSWORD",
     },
+    "t4app_admin": {
+        "name": "T4APP - ADMIN",
+        "base_url": "https://t4app.com",
+        "login_path": "/api/login",  # T4App uses JWT API authentication
+        "logs_path": "/admin/logs",
+        "username_env": "T4APP_USER",
+        "password_env": "T4APP_PASSWORD",
+        "auth_type": "jwt_api",  # Special marker for JWT API auth
+    },
 }
 
 # Specific mapping for SMS notifications (prevent NameError)
@@ -84,7 +93,8 @@ SMS_APP_NAMES = {
     "accuratecargo": "ACCURATE",
     "broker_goto": "BROKER GOTO",
     "klc_crossdock": "CROSSDOCK KLC",
-    "t4tms_backend": "T4TMS BACKEND"
+    "t4tms_backend": "T4TMS BACKEND",
+    "t4app_admin": "T4APP ADMIN"
 }
 
 
@@ -100,7 +110,14 @@ def get_apps_config_from_db() -> Dict[str, Dict]:
     Returns empty dict if database is unavailable or no apps found.
     """
     try:
+        from flask import has_app_context
         from t4alerts_backend.apps_manager.models import MonitoredApp
+        
+        # Check if we're in an application context
+        if not has_app_context():
+            # Not in Flask context, can't access DB
+            return {}
+        
         # Import moved to subfolder, we need to adjust sys.path or use relative
         # But here we are in app/config.py, root of project.
         # After restructuring, t4alerts_backend is in t4alerts_web/backend.
@@ -108,6 +125,8 @@ def get_apps_config_from_db() -> Dict[str, Dict]:
         return MonitoredApp.to_config_format()
     except Exception as e:
         # Silently fail if DB not found or model not accessible (e.g. main.py outside context)
+        import logging
+        logging.warning(f"Could not load apps from DB: {e}")
         return {}
 
 

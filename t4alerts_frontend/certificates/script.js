@@ -106,3 +106,11 @@ document.head.appendChild(style);
 document.addEventListener('DOMContentLoaded', () => {
     new CertificatesView().init();
 });
+
+/**
+ * Logout function
+ */
+function logout() {
+    localStorage.removeItem('t4_access_token');
+    window.location.href = '/login';
+}

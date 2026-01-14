@@ -131,12 +131,13 @@ def get_app_stats_logic(app_key, date_str):
         from app.signatures import build_signature
         
         def convert_to_dict_format(error_lines, dia):
-            """Convert list of error strings to list of dicts with firma field"""
+            """Convert list of error strings to list of dicts with firma and full content"""
             result = []
             for line in error_lines:
                 firma = build_signature(line)
                 result.append({
                     'firma': firma,
+                    'full_content': line,  # Preserve original full error content
                     'timestamp': datetime.combine(dia, datetime.min.time())
                 })
             return result
@@ -278,34 +279,37 @@ def agregar_errores_por_firma(errores_lista, dia):
     Agrupa errores por firma (signature) y cuenta recurrencias.
     
     Args:
-        errores_lista: Lista de dicts con 'firma', 'timestamp', etc.
+        errores_lista: Lista de dicts con 'firma', 'full_content', 'timestamp', etc.
         dia: fecha del día (para defaults)
     
     Returns:
-        Lista de dicts: [{firma: str, count: int, first_time: datetime}, ...]
+        Lista de dicts: [{firma: str, full_content: str, count: int, first_time: datetime}, ...]
         Ordenados por tiempo de primera aparición
     """
     from collections import defaultdict
     
-    agregado = defaultdict(lambda: {'count': 0, 'first_time': None})
+    agregado = defaultdict(lambda: {'count': 0, 'first_time': None, 'full_content': None})
     
     for error in errores_lista:
         firma = error.get('firma', 'Unknown error')
+        full_content = error.get('full_content', firma)  # Use full content if available
         
         # El timestamp puede venir de diferentes campos según la fuente
         timestamp = error.get('timestamp') or error.get('fecha') or datetime.combine(dia, datetime.min.time())
         
         agregado[firma]['count'] += 1
         
-        # Guardar timestamp más temprano
+        # Guardar timestamp más temprano y su contenido completo correspondiente
         if agregado[firma]['first_time'] is None or timestamp < agregado[firma]['first_time']:
             agregado[firma]['first_time'] = timestamp
+            agregado[firma]['full_content'] = full_content  # Store full content from first occurrence
     
     # Convertir a lista
     result = []
     for firma, data in agregado.items():
         result.append({
             'firma': firma,
+            'full_content': data['full_content'] or firma,  # Fallback to firma if no full content
             'count': data['count'],
             'first_time': data['first_time'] or datetime.combine(dia, datetime.min.time())
         })
@@ -321,7 +325,7 @@ def format_errors_for_frontend(aggregated_errors):
     Formatea errores agregados para el frontend.
     
     Args:
-        aggregated_errors: Lista de dicts con firma, count, first_time
+        aggregated_errors: Lista de dicts con firma, full_content, count, first_time
     
     Returns:
         Lista de dicts con timestamp, message, count (formato esperado por JS)
@@ -330,7 +334,7 @@ def format_errors_for_frontend(aggregated_errors):
     for err in aggregated_errors:
         formatted.append({
             "timestamp": err["first_time"].strftime('%Y-%m-%d %H:%M:%S'),
-            "message": err["firma"],
+            "message": err.get("full_content", err["firma"]),  # Use full content instead of signature
             "count": err["count"]
         })
     return formatted
@@ -469,8 +473,19 @@ def scan_adhoc():
     Realiza un escaneo bajo demanda para una aplicación no registrada.
     """
     logger.info("⚡ RECEIVED SCAN-ADHOC REQUEST")
+    
+    # Log JWT claims for debugging
+    try:
+        from flask_jwt_extended import get_jwt
+        claims = get_jwt()
+        logger.info(f"  User role: {claims.get('role', 'unknown')}")
+        logger.info(f"  User id: {claims.get('sub', 'unknown')}")
+    except Exception as e:
+        logger.warning(f"  Could not extract JWT claims: {e}")
+    
     try:
         data = request.get_json()
+        logger.info(f"  Request data keys: {list(data.keys()) if data else 'None'}")
         
         # Validate required fields
         required_fields = ['base_url', 'username', 'password']
@@ -488,6 +503,7 @@ def scan_adhoc():
         logger.info(f"Ad-hoc scan requested for {base_url} on {date_str}")
         
         # Import scraping function
+        logger.info("  Importing dependencies...")
         from app.scrapper import procesar_aplicacion
         from app.config import APPS_CONFIG
         from datetime import date
@@ -495,11 +511,14 @@ def scan_adhoc():
         # Parse date
         try:
             dia = date.fromisoformat(date_str)
-        except ValueError:
+            logger.info(f"  Parsed date: {dia}")
+        except ValueError as e:
+            logger.error(f"  Date parse error: {e}")
             return jsonify({'error': f'Invalid date format: {date_str}. Use YYYY-MM-DD'}), 400
         
         # Create temporary app key
         temp_app_key = f"adhoc_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        logger.info(f"  Created temp app key: {temp_app_key}")
         
         # Temporarily inject into APPS_CONFIG
         APPS_CONFIG[temp_app_key] = {
@@ -510,10 +529,13 @@ def scan_adhoc():
             "username": username,
             "password": password,
         }
+        logger.info(f"  Injected temp config into APPS_CONFIG")
         
         try:
             # Execute scraping
+            logger.info(f"  Calling procesar_aplicacion for {temp_app_key}...")
             resultado = procesar_aplicacion(temp_app_key, date_str, dia)
+            logger.info(f"  procesar_aplicacion completed successfully")
             
             # Format response (same as /view endpoint)
             uncontrolled_errors = resultado.get('no_controlados_nuevos', []) + resultado.get('no_controlados_avisados', [])
@@ -529,12 +551,21 @@ def scan_adhoc():
             logger.info(f"Ad-hoc scan completed for {base_url}: {len(uncontrolled_errors)} uncontrolled, {len(controlled_errors)} controlled")
             return jsonify(response), 200
             
+        except Exception as scraper_error:
+            logger.error(f"  ERROR in procesar_aplicacion: {scraper_error}")
+            logger.error(f"  Error type: {type(scraper_error).__name__}")
+            import traceback
+            traceback.print_exc()
+            raise  # Re-raise to be caught by outer except
+            
         finally:
             # Clean up temporary config
             APPS_CONFIG.pop(temp_app_key, None)
+            logger.info(f"  Cleaned up temp app key: {temp_app_key}")
     
     except Exception as e:
-        logger.error(f"Error in ad-hoc scan: {e}")
+        logger.error(f"❌ Error in ad-hoc scan: {e}")
+        logger.error(f"  Error type: {type(e).__name__}")
         import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"  Full traceback:\n{traceback.format_exc()}")
+        return jsonify({'error': str(e), 'type': type(e).__name__}), 500
