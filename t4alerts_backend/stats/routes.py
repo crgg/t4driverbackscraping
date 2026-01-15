@@ -520,16 +520,46 @@ def scan_adhoc():
         temp_app_key = f"adhoc_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         logger.info(f"  Created temp app key: {temp_app_key}")
         
+        # Auto-detect authentication type based on base_url
+        auth_type = None
+        detected_login_path = login_path
+        normalized_base_url = base_url
+        detected_logs_path = logs_path
+        
+        # Check if this is a T4App domain (requires JWT API authentication)
+        if 't4app.com' in base_url.lower() and '/admin' in base_url.lower():
+            auth_type = 'jwt_api'
+            detected_login_path = '/api/login'  # Override to use API endpoint
+            detected_logs_path = '/admin/logs'  # Override to use correct logs endpoint
+            
+            # Normalize base_url: remove /admin and anything after it
+            # e.g., "https://t4app.com/admin" -> "https://t4app.com"
+            # This ensures login URL becomes "https://t4app.com/api/login" not "https://t4app.com/admin/api/login"
+            if '/admin' in normalized_base_url:
+                normalized_base_url = normalized_base_url.split('/admin')[0]
+            
+            logger.info(f"  ✓ Detected T4App domain - using JWT API authentication")
+            logger.info(f"  ✓ Normalized base_url from {base_url} to {normalized_base_url}")
+            logger.info(f"  ✓ Auto-adjusted login_path from {login_path} to {detected_login_path}")
+            logger.info(f"  ✓ Auto-adjusted logs_path from {logs_path} to {detected_logs_path}")
+        
         # Temporarily inject into APPS_CONFIG
-        APPS_CONFIG[temp_app_key] = {
+        temp_config = {
             "name": f"Ad-Hoc Scan: {base_url}",
-            "base_url": base_url,
-            "login_path": login_path,
-            "logs_path": logs_path,
+            "base_url": normalized_base_url,
+            "login_path": detected_login_path,
+            "logs_path": detected_logs_path,
             "username": username,
             "password": password,
         }
+        
+        # Add auth_type if detected
+        if auth_type:
+            temp_config["auth_type"] = auth_type
+        
+        APPS_CONFIG[temp_app_key] = temp_config
         logger.info(f"  Injected temp config into APPS_CONFIG")
+        logger.info(f"  Config: auth_type={auth_type}, base_url={normalized_base_url}, login_path={detected_login_path}")
         
         try:
             # Execute scraping

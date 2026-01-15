@@ -108,6 +108,16 @@ class StatsManager {
 
         this.appViewContainer.style.display = 'block';
 
+        // FORCE RESET TABS TO LOGS
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        const logsBtn = document.querySelector('.tab-btn[onclick="switchTab(\'logs\')"]');
+        if (logsBtn) logsBtn.classList.add('active');
+
+        const viewLogs = document.getElementById('view-logs');
+        const viewStats = document.getElementById('view-stats');
+        if (viewLogs) viewLogs.style.display = 'flex';
+        if (viewStats) viewStats.style.display = 'none';
+
         if (updateHistory) {
             const newUrl = `/errors/${appKey}`;
             window.history.pushState({ appKey, appName }, '', newUrl);
@@ -431,6 +441,25 @@ class DashboardView {
         document.getElementById('dashboard-overview').style.display = 'none';
         document.getElementById('feed-container').style.display = 'none';
         window.statsManager = new StatsManager();
+
+        // Check if we start at a specific app route
+        const pathParts = window.location.pathname.split('/');
+        if (pathParts.length > 2 && pathParts[1] === 'errors') {
+            console.log("Direct access to app detected, loading apps...");
+            await window.statsManager.loadAppsList();
+            window.appsLoaded = true;
+
+            // Open the accordion
+            const content = document.getElementById('stats-content');
+            const header = document.getElementById('accordion-stats');
+            if (content && header) {
+                header.classList.add('active');
+                // Wait a bit for DOM to settle if needed, but scrollHeight should work
+                setTimeout(() => {
+                    content.style.maxHeight = content.scrollHeight + "px";
+                }, 100);
+            }
+        }
     }
 }
 
@@ -733,7 +762,11 @@ async function saveCurrentAppConfig() {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify(payload)
         });
-        if (res.ok) { alert('✅ Saved!'); window.location.reload(); }
+        if (res.ok) {
+            alert('✅ Saved!');
+            // Redirect to the new app view
+            window.location.href = `/errors/${payload.app_key}`;
+        }
         else throw new Error("Save failed");
     } catch (e) { alert(e.message); saveBtn.innerText = '💾 Save & Add to Menu'; }
 }

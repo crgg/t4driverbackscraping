@@ -17,6 +17,8 @@ def create_logged_session(app_key: str = "driverapp_goto", max_retries: int = 3)
     T4App Admin uses JWT API authentication.
     Other apps use traditional form-based login.
     
+    Auth type is detected from config's 'auth_type' field or inferred from app_key.
+    
     Args:
         app_key: clave de la aplicación en APPS_CONFIG (default: 'driverapp_goto')
         max_retries: número máximo de intentos de conexión (default: 3)
@@ -29,13 +31,21 @@ def create_logged_session(app_key: str = "driverapp_goto", max_retries: int = 3)
         requests.exceptions.ConnectionError: si no se puede establecer conexión
         requests.exceptions.Timeout: si la conexión excede el timeout
     """
-    # T4TMS uses HTTP Basic Auth, not form-based login
-    if app_key == "t4tms_backend":
-        return _create_basic_auth_session(app_key, max_retries)
-    # T4App Admin uses JWT API authentication
-    elif app_key == "t4app_admin":
+    # Get config to check auth_type
+    from .config import APPS_CONFIG
+    config = APPS_CONFIG.get(app_key, {})
+    auth_type = config.get('auth_type')
+    
+    # Determine authentication method
+    # Priority: auth_type field > hardcoded app_key checks
+    if auth_type == 'jwt_api':
+        # JWT API authentication (T4App Admin and any ad-hoc T4App scans)
         return _create_jwt_api_session(app_key, max_retries)
+    elif app_key == "t4tms_backend":
+        # HTTP Basic Auth (T4TMS Backend)
+        return _create_basic_auth_session(app_key, max_retries)
     else:
+        # Traditional form-based login (most apps)
         return _create_form_login_session(app_key, max_retries)
 
 
@@ -267,9 +277,11 @@ def _create_form_login_session(app_key: str, max_retries: int = 3) -> requests.S
             # Si seguimos viendo el form de login, es que falló
             # Buscamos el input de password o el token, eso indica que seguimos en login
             if soup.find("input", {"name": "password"}) and ('name="password"' in resp.text):
-                 # Doble check: si el response url es el mismo que login url
-                 if resp.url.split('?')[0] == login_url.split('?')[0]:
-                     raise RuntimeError(f"❌ Login falló en {app_name}: revisa credenciales o el payload. Campo usado: {field_name}")
+                 # Verificamos si seguimos en la página de login (redirección fallida)
+                 if '/login' in session.url or 'login' in session.url.split('/')[-1]:
+                     print(f"❌ Login falló. URL final: {session.url}")
+                     print(f"   Usuario intentado: {username}")
+                     raise RuntimeError(f"❌ Login falló en {app_name}: revisa credenciales o el payload. Campo usado: {field_name}. Usuario: {username}")
 
             print(f"✅ Autenticación exitosa en {app_name}")
             

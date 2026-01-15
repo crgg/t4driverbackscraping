@@ -8,6 +8,7 @@ from flask import Flask, send_from_directory, redirect
 import os
 
 app = Flask(__name__)
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable cache for development
 
 # Directorio base del frontend
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

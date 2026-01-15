@@ -29,10 +29,15 @@ def fetch_logs_html(session, fecha_str: str, app_key: str = "driverapp_goto") ->
     1) GET /logs -> lista de archivos (laravel-YYYY-MM-DD.log y sus ?l=...)
     2) Busca el enlace correspondiente a la fecha pedida y hace GET a ese ?l=...
     
-    NOTE: T4App Admin uses JSON API, handled separately.
+    NOTE: T4App Admin uses JSON API/HTML tokens, handled separately via auth_type detection.
     """
-    # Special handling for T4App which uses JSON API
-    if app_key == "t4app_admin":
+    # Detect if this app uses JWT API (T4App Admin and ad-hoc scans)
+    from app.config import APPS_CONFIG
+    config = APPS_CONFIG.get(app_key, {})
+    auth_type = config.get('auth_type', '')
+    
+    # Special handling for T4App which uses JSON API logic
+    if app_key == "t4app_admin" or auth_type == "jwt_api":
         return _fetch_logs_from_json_api(session, fecha_str, app_key)
     
     # 1) Obtenemos la URL base de logs para esa app
