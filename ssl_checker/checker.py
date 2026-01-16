@@ -50,6 +50,12 @@ class SSLChecker:
             ctx = SSL.Context(SSL.TLS_CLIENT_METHOD)
             ctx.check_hostname = False
             ctx.verify_mode = SSL.VERIFY_NONE
+            
+            # Allow legacy connections if needed (OpenSSL 3+)
+            try:
+                ctx.set_options(SSL.OP_LEGACY_SERVER_CONNECT)
+            except AttributeError:
+                pass
 
             sock_ssl = SSL.Connection(ctx, sock)
             sock_ssl.set_connect_state()
@@ -61,7 +67,15 @@ class SSLChecker:
             sock.close()
 
             return HostInfo(cert=crypto_cert, peername=peername, hostname=hostname)
-            return HostInfo(cert=crypto_cert, peername=peername, hostname=hostname)
+        except SSL.SysCallError as e:
+            logger.warning(f"SSL Connection Failed for {hostname}: Server rejected connection (ECONNRESET/SysCallError).")
+            return None
+        except SSL.WantReadError:
+            logger.warning(f"SSL Connection Timeout for {hostname} (WantReadError).")
+            return None
+        except socket.timeout:
+            logger.warning(f"SSL Connection Timeout for {hostname} (Socket Timeout).")
+            return None
         except Exception as e:
             logger.exception(f"ERROR EN GET CERTIFICATE para {hostname}")
             return None

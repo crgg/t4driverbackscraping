@@ -12,7 +12,7 @@ class CertificatesView {
                 return;
             }
 
-            const response = await fetch(T4Config.getEndpoint('certificates'), {
+            const response = await fetch(T4Config.getEndpoint('certificates') + '/status', {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -106,6 +106,132 @@ document.head.appendChild(style);
 document.addEventListener('DOMContentLoaded', () => {
     new CertificatesView().init();
 });
+
+// --- Modal & Check Logic ---
+
+let currentCheckResult = null; // Store result to save later
+
+function openCheckModal() {
+    document.getElementById('checkModal').style.display = 'block';
+    document.getElementById('domainInput').value = '';
+    document.getElementById('checkResult').style.display = 'none';
+    document.getElementById('domainInput').focus();
+}
+
+function closeCheckModal() {
+    document.getElementById('checkModal').style.display = 'none';
+}
+
+// Close modal when clicking outside
+// Close modal when clicking outside
+window.onclick = function (event) {
+    const modal = document.getElementById('checkModal');
+    if (event.target == modal) {
+        modal.style.display = "none";
+    }
+}
+
+// Enter key support
+document.getElementById('domainInput').addEventListener("keypress", function (event) {
+    if (event.key === "Enter") {
+        event.preventDefault();
+        checkCertificate();
+    }
+});
+
+async function checkCertificate() {
+    const domain = document.getElementById('domainInput').value.trim();
+    if (!domain) {
+        alert("Please enter a domain");
+        return;
+    }
+
+    const resultDiv = document.getElementById('checkResult');
+    const msgP = document.getElementById('resultMessage');
+    const btnSave = document.getElementById('btnSave');
+
+    // Show loading state
+    msgP.innerHTML = "Checking...";
+    msgP.style.color = "#ccc";
+    resultDiv.style.display = 'block';
+    btnSave.style.display = 'none';
+
+    try {
+        const token = localStorage.getItem('t4_access_token');
+        const response = await fetch(T4Config.getEndpoint('certificates') + '/check', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ hostname: domain })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            msgP.innerHTML = `Error: ${data.error || 'Unknown error'}`;
+            msgP.style.color = "red";
+            currentCheckResult = null;
+        } else {
+            // Update UI with result
+            const daysLeft = data.days_left;
+            const status = data.status;
+            let color = data.color || 'white';
+
+            msgP.innerHTML = `
+                <strong style="color:${color}">${status}</strong><br>
+                Days Left: <strong>${daysLeft}</strong><br>
+                Expires: ${data.expires}<br>
+                Issuer: ${data.issuer}
+            `;
+
+            // Allow saving if valid result
+            if (status !== 'ERROR') {
+                btnSave.style.display = 'inline-block';
+                currentCheckResult = data;
+            } else {
+                currentCheckResult = null;
+            }
+        }
+    } catch (e) {
+        msgP.innerHTML = `Error: ${e.message}`;
+        msgP.style.color = "red";
+    }
+}
+
+async function saveCertificate() {
+    if (!currentCheckResult) return;
+
+    // We save the original hostname typed (or cleaned one returned?)
+    // Ideally usage of returned hostname is safer
+    const hostname = currentCheckResult.hostname;
+
+    try {
+        const token = localStorage.getItem('t4_access_token');
+        const response = await fetch(T4Config.getEndpoint('certificates') + '/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ hostname: hostname })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            alert("Certificate saved successfully!");
+            closeCheckModal();
+            // Refresh list
+            new CertificatesView().init();
+        } else {
+            alert(`Failed to save: ${data.error || data.message}`);
+        }
+    } catch (e) {
+        alert(`Error saving: ${e.message}`);
+    }
+}
 
 /**
  * Logout function

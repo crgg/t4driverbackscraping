@@ -54,10 +54,10 @@ def main() -> None:
         with flask_app.app_context():
             apps_config = get_apps_config(dynamic_only=False)
     except Exception as e:
-        print(f"⚠️ Info: Running without Flask context. Attempting static loading fallback.")
+        print(f"⚠️ Info: Running without Flask context. Attempting static loading fallback. Error: {e}")
         # Fallback to static config from app.config
         try:
-            from app.config import get_apps_config
+            # get_apps_config is already imported at top level
             apps_config = get_apps_config(dynamic_only=False)
         except:
             from app.config import APPS_CONFIG_LEGACY

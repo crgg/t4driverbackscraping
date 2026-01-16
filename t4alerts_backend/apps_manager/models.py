@@ -311,13 +311,36 @@ class MonitoredApp(db.Model):
             for app in active_apps:
                 username, password = app.get_decrypted_credentials()
                 
+                # Determinar auth_type y normalizar URLs para T4App
+                auth_type = None
+                base_url = app.base_url
+                login_path = app.login_path
+                logs_path = app.logs_path
+                
+                # Special logic for T4App Admin which requires JWT
+                # Check for app_key OR domain heuristic
+                is_t4app = (app.app_key == 't4app_admin') or \
+                           ('t4app.com' in base_url.lower() and '/admin' in base_url.lower())
+                           
+                if is_t4app:
+                    auth_type = 'jwt_api'
+                    # Force correct API paths
+                    login_path = '/api/login'
+                    logs_path = '/admin/logs'
+                    
+                    # Normalize base_url: remove /admin so /api/login appends correctly
+                    # e.g. https://t4app.com/admin -> https://t4app.com
+                    if '/admin' in base_url:
+                        base_url = base_url.replace('/admin', '')
+
                 config[app.app_key] = {
                     "name": app.app_name,
-                    "base_url": app.base_url,
-                    "login_path": app.login_path,
-                    "logs_path": app.logs_path,
+                    "base_url": base_url,
+                    "login_path": login_path,
+                    "logs_path": logs_path,
                     "username": username,
                     "password": password,
+                    "auth_type": auth_type
                 }
             
             logger.debug(f"Generated config format for {len(config)} apps")

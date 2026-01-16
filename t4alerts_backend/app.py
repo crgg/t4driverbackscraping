@@ -60,6 +60,7 @@ def create_app():
         # Import models to register them with SQLAlchemy
         from t4alerts_backend.admin.models import UserPermission
         from t4alerts_backend.apps_manager.models import MonitoredApp
+        from t4alerts_backend.certificates.models import SSLCertificate
         
         db.create_all()
         

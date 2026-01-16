@@ -188,6 +188,7 @@ def _get_legacy_converted() -> Dict[str, Dict]:
                 "logs_path": config["logs_path"],
                 "username": username,
                 "password": password,
+                "auth_type": config.get("auth_type"),
             }
     return legacy_converted
 

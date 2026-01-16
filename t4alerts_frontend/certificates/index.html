@@ -19,8 +19,36 @@
                 <button onclick="logout()" class="logout-btn-header">Logout</button>
             </div>
             <div class="back-btn" onclick="ViewFactory.navigateTo('menu')">← Back</div>
-            <h1>SSL <span class="neon-text">Monitor</span></h1>
+
+            <div class="title-container">
+                <h1>SSL <span class="neon-text">Monitor</span></h1>
+                <button class="check-btn" onclick="openCheckModal()">Check Certificate</button>
+            </div>
         </header>
+
+        <!-- Modal -->
+        <div id="checkModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeCheckModal()">&times;</span>
+                <h2>Check SSL Certificate</h2>
+                <div class="form-group">
+                    <label for="domainInput">Domain / URL:</label>
+                    <input type="text" id="domainInput" placeholder="example.com or https://example.com">
+                </div>
+                <!-- Port input could be added here if needed, keeping it simple for now as requested -->
+
+                <button onclick="checkCertificate()" class="action-btn">Check</button>
+
+                <div id="checkResult" class="check-result" style="display: none;">
+                    <p id="resultMessage"></p>
+                    <div class="modal-actions">
+                        <button onclick="closeCheckModal()" class="btn-ok">OK</button>
+                        <button onclick="saveCertificate()" id="btnSave" class="btn-save"
+                            style="display: none;">Save</button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <div id="loading" class="loading">Loading certificates...</div>
         <div id="certificates-grid" class="cards-container">

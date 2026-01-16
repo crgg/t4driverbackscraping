@@ -13,7 +13,7 @@ class Config {
         this.endpoints = {
             login: `${this.API_BASE_URL}/auth/login`,
             menu: `${this.API_BASE_URL}/menu`,
-            certificates: `${this.API_BASE_URL}/certificates/status`,
+            certificates: `${this.API_BASE_URL}/certificates`,
             errors: `${this.API_BASE_URL}/dashboard/errors`,
             stats_apps: `${this.API_BASE_URL}/stats/apps`,
             stats_apps_debug: `${this.API_BASE_URL}/stats/debug/apps`,
