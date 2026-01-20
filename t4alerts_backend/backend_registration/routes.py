@@ -13,6 +13,21 @@ registration_bp = Blueprint('registration', __name__)
 
 @registration_bp.route('/register', methods=['POST'])
 def register():
+    """
+    Public registration is disabled for security.
+    Users must be created via CLI scripts (create_user.py or create_admin_user.py).
+    """
+    logger.warning("Attempted access to disabled registration endpoint")
+    return jsonify({
+        "error": "Public registration is disabled",
+        "message": "User accounts must be created by administrators. Please contact your system administrator."
+    }), 403
+
+# ORIGINAL REGISTRATION CODE (DISABLED)
+# Kept for reference - can be re-enabled if needed
+"""
+@registration_bp.route('/register', methods=['POST'])
+def register():
     try:
         data = request.get_json()
         email = data.get('email')
@@ -44,17 +59,14 @@ def register():
                 f"<p>You can now login to the platform.</p>"
                 f"<br><p>Best regards,<br><b>T4Alerts Team</b></p>"
             )
-            # send_email(subject, html_body, to_addrs, sender_name="t4alerts")
             send_email(subject, body, [email], sender_name="t4alerts")
             logger.info(f"Confirmation email sent to {email}")
         except Exception as e:
             logger.error(f"Failed to send confirmation email: {e}")
-            # Do not rollback user creation just because email failed, 
-            # but maybe return a specific code or warning if critical.
-            # For now, we proceed as 201.
 
         return jsonify({"msg": "User created successfully"}), 201
 
     except Exception as e:
         logger.error(f"Error in registration: {e}")
         return jsonify({"msg": "Internal Server Error"}), 500
+"""

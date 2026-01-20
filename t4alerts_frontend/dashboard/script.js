@@ -436,6 +436,40 @@ window.switchTab = function (tabName) {
     }
 };
 
+/**
+ * Filter errors in the app view based on search input
+ */
+window.filterAppErrors = function () {
+    const searchInput = document.getElementById('app-search-input');
+    if (!searchInput) return;
+
+    const searchTerm = searchInput.value.toLowerCase();
+
+    // Filter both controlled and uncontrolled logs
+    filterLogGroup('logs-uncontrolled', searchTerm);
+    filterLogGroup('logs-controlled', searchTerm);
+};
+
+/**
+ * Helper to filter a specific log group
+ */
+function filterLogGroup(containerId, searchTerm) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const logItems = container.querySelectorAll('.history-item');
+
+    logItems.forEach(item => {
+        const text = item.textContent.toLowerCase();
+        if (text.includes(searchTerm)) {
+            item.style.display = '';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
+
+
 class DashboardView {
     async init() {
         document.getElementById('dashboard-overview').style.display = 'none';

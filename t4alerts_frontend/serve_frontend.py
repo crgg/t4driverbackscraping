@@ -21,13 +21,13 @@ def index():
 @app.route('/registration')
 @app.route('/registration/')
 def registration_redirect():
-    """Redirige a la página de registro"""
-    return send_from_directory(os.path.join(BASE_DIR, 'frontend_registration'), 'index.html')
+    """Registration is disabled - redirect to login"""
+    return redirect('/login')
 
 @app.route('/registration/<path:filename>')
 def registration_files(filename):
-    """Sirve archivos estáticos de registration"""
-    return send_from_directory(os.path.join(BASE_DIR, 'frontend_registration'), filename)
+    """Registration is disabled - redirect to login"""
+    return redirect('/login')
 
 @app.route('/login')
 @app.route('/login/')
@@ -135,6 +135,5 @@ def assets_files(filename):
 
 if __name__ == '__main__':
     print("🚀 Frontend Server iniciado en http://localhost:8000")
-    print("📝 Registro: http://localhost:8000/registration")
     print("🔐 Login: http://localhost:8000/login")
     app.run(host='0.0.0.0', port=8000, debug=True)

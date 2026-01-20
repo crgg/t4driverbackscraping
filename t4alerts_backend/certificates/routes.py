@@ -24,15 +24,21 @@ def get_certificates_status():
         
         # 2. Get Dynamic Domains from DB
         dynamic_certs = SSLCertificate.query.all()
-        dynamic_domains = [cert.hostname for cert in dynamic_certs]
+        dynamic_domains_map = {cert.hostname: cert.id for cert in dynamic_certs}
         
         # 3. Merge lists (unique)
-        all_domains = list(set(static_domains + dynamic_domains))
+        all_domains = list(set(static_domains + list(dynamic_domains_map.keys())))
         
         results = []
         for domain in all_domains:
             # We use the new check_domain method that returns a dict
             status = checker.check_domain(domain)
+            
+            # Add certificate ID and is_dynamic flag
+            is_dynamic = domain in dynamic_domains_map
+            status['id'] = dynamic_domains_map.get(domain, None)
+            status['is_dynamic'] = is_dynamic
+            
             results.append(status)
             
         return jsonify(results), 200
@@ -94,3 +100,72 @@ def add_certificate():
         logger.error(f"Error adding certificate {hostname}: {e}")
         db.session.rollback()
         return jsonify({"error": "Failed to add certificate"}), 500
+
+@certificates_bp.route('/<int:cert_id>', methods=['DELETE'])
+@jwt_required()
+def delete_certificate(cert_id):
+    """
+    Deletes a certificate from the database by ID.
+    Only dynamic certificates can be deleted.
+    """
+    try:
+        cert = SSLCertificate.query.get(cert_id)
+        
+        if not cert:
+            return jsonify({"error": "Certificate not found"}), 404
+        
+        hostname = cert.hostname
+        db.session.delete(cert)
+        db.session.commit()
+        
+        logger.info(f"Certificate deleted: {hostname} (ID: {cert_id})")
+        return jsonify({"message": "Certificate deleted successfully"}), 200
+    except Exception as e:
+        logger.error(f"Error deleting certificate {cert_id}: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to delete certificate"}), 500
+
+@certificates_bp.route('/<int:cert_id>', methods=['PUT'])
+@jwt_required()
+def update_certificate(cert_id):
+    """
+    Updates a certificate's hostname.
+    """
+    try:
+        cert = SSLCertificate.query.get(cert_id)
+        
+        if not cert:
+            return jsonify({"error": "Certificate not found"}), 404
+        
+        data = request.get_json()
+        new_hostname = data.get('hostname')
+        
+        if not new_hostname:
+            return jsonify({"error": "Hostname is required"}), 400
+        
+        # Clean domain
+        checker = SSLChecker()
+        new_hostname = checker.clean_domain(new_hostname)
+        
+        # Check if new hostname already exists (excluding current certificate)
+        existing = SSLCertificate.query.filter(
+            SSLCertificate.hostname == new_hostname,
+            SSLCertificate.id != cert_id
+        ).first()
+        
+        if existing:
+            return jsonify({"error": "A certificate with this hostname already exists"}), 409
+        
+        old_hostname = cert.hostname
+        cert.hostname = new_hostname
+        db.session.commit()
+        
+        logger.info(f"Certificate updated: {old_hostname} → {new_hostname} (ID: {cert_id})")
+        return jsonify({
+            "message": "Certificate updated successfully",
+            "certificate": cert.to_dict()
+        }), 200
+    except Exception as e:
+        logger.error(f"Error updating certificate {cert_id}: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to update certificate"}), 500

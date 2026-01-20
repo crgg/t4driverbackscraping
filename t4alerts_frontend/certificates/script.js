@@ -75,6 +75,17 @@ class CertificatesView {
             card.style.opacity = '0';
             card.style.animation = `fadeIn 0.5s ease forwards ${index * 0.1}s`;
 
+            // Build action buttons HTML (only for dynamic certificates)
+            let actionsHTML = '';
+            if (cert.is_dynamic && cert.id) {
+                actionsHTML = `
+                    <div class="cert-actions">
+                        <button class="btn-edit" onclick="editCertificate(${cert.id}, '${cert.hostname}')">✏️ Edit</button>
+                        <button class="btn-delete" onclick="deleteCertificate(${cert.id}, '${cert.hostname}')">🗑️ Delete</button>
+                    </div>
+                `;
+            }
+
             card.innerHTML = `
                 <div class="cert-header">
                     <div class="cert-hostname">${cert.hostname}</div>
@@ -85,6 +96,7 @@ class CertificatesView {
                     <p><strong>Expires:</strong> ${cert.expires}</p>
                     <p><strong>Issuer:</strong> ${cert.issuer}</p>
                 </div>
+                ${actionsHTML}
             `;
 
             this.container.appendChild(card);
@@ -105,6 +117,17 @@ document.head.appendChild(style);
 // Initialize view
 document.addEventListener('DOMContentLoaded', () => {
     new CertificatesView().init();
+
+    // Enter key support - must be inside DOMContentLoaded to ensure element exists
+    const domainInput = document.getElementById('domainInput');
+    if (domainInput) {
+        domainInput.addEventListener("keypress", function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                checkCertificate();
+            }
+        });
+    }
 });
 
 // --- Modal & Check Logic ---
@@ -123,19 +146,10 @@ function closeCheckModal() {
 }
 
 // Close modal when clicking outside
-// Close modal when clicking outside
-window.onclick = function (event) {
+window.addEventListener('click', function (event) {
     const modal = document.getElementById('checkModal');
-    if (event.target == modal) {
+    if (event.target === modal) {
         modal.style.display = "none";
-    }
-}
-
-// Enter key support
-document.getElementById('domainInput').addEventListener("keypress", function (event) {
-    if (event.key === "Enter") {
-        event.preventDefault();
-        checkCertificate();
     }
 });
 
@@ -230,6 +244,92 @@ async function saveCertificate() {
         }
     } catch (e) {
         alert(`Error saving: ${e.message}`);
+    }
+}
+
+/**
+ * Delete a certificate
+ */
+async function deleteCertificate(certId, hostname) {
+    if (!confirm(`Are you sure you want to delete the certificate for "${hostname}"?`)) {
+        return;
+    }
+
+    try {
+        const token = localStorage.getItem('t4_access_token');
+        const response = await fetch(T4Config.getEndpoint('certificates') + `/${certId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            alert("Certificate deleted successfully!");
+            // Refresh list
+            new CertificatesView().init();
+        } else {
+            alert(`Failed to delete: ${data.error || data.message}`);
+        }
+    } catch (e) {
+        alert(`Error deleting: ${e.message}`);
+    }
+}
+
+/**
+ * Edit a certificate
+ */
+function editCertificate(certId, currentHostname) {
+    document.getElementById('editModal').style.display = 'block';
+    document.getElementById('editHostnameInput').value = currentHostname;
+    document.getElementById('editCertId').value = certId;
+    document.getElementById('editHostnameInput').focus();
+}
+
+/**
+ * Close edit modal
+ */
+function closeEditModal() {
+    document.getElementById('editModal').style.display = 'none';
+}
+
+/**
+ * Save edited certificate
+ */
+async function saveEditedCertificate() {
+    const certId = document.getElementById('editCertId').value;
+    const newHostname = document.getElementById('editHostnameInput').value.trim();
+
+    if (!newHostname) {
+        alert("Please enter a hostname");
+        return;
+    }
+
+    try {
+        const token = localStorage.getItem('t4_access_token');
+        const response = await fetch(T4Config.getEndpoint('certificates') + `/${certId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ hostname: newHostname })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            alert("Certificate updated successfully!");
+            closeEditModal();
+            // Refresh list
+            new CertificatesView().init();
+        } else {
+            alert(`Failed to update: ${data.error || data.message}`);
+        }
+    } catch (e) {
+        alert(`Error updating: ${e.message}`);
     }
 }
 

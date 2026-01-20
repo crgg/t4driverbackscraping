@@ -18,7 +18,7 @@
             <div class="header-top">
                 <button onclick="logout()" class="logout-btn-header">Logout</button>
             </div>
-            <div class="back-btn" onclick="ViewFactory.navigateTo('menu')">← Back</div>
+            <div class="back-btn" onclick="window.location.href='/menu'">← Back</div>
 
             <div class="title-container">
                 <h1>SSL <span class="neon-text">Monitor</span></h1>
@@ -47,6 +47,21 @@
                             style="display: none;">Save</button>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Edit Modal -->
+        <div id="editModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeEditModal()">&times;</span>
+                <h2>Edit Certificate</h2>
+                <div class="form-group">
+                    <label for="editHostnameInput">Hostname / URL:</label>
+                    <input type="text" id="editHostnameInput" placeholder="example.com or https://example.com">
+                    <input type="hidden" id="editCertId">
+                </div>
+
+                <button onclick="saveEditedCertificate()" class="action-btn">Save</button>
             </div>
         </div>
 

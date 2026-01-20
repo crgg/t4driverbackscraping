@@ -126,6 +126,13 @@
                     <input type="date" id="stats-date-picker">
                 </div>
 
+                <!-- Search Bar -->
+                <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
+                    <input type="text" id="app-search-input" placeholder="🔍 Search errors (SQL, type, message...)"
+                        onkeyup="filterAppErrors()"
+                        style="padding: 10px 15px; width: 350px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; outline: none;">
+                </div>
+
                 <div class="tabs-container">
                     <button class="tab-btn active" onclick="switchTab('logs')">LOGS</button>
                     <button class="tab-btn" onclick="switchTab('stats')">STATS</button>
