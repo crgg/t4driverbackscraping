@@ -30,7 +30,10 @@
                 <h1>🔐 Admin Panel</h1>
                 <p>User Permission Management</p>
             </div>
-            <button class="btn-back" onclick="window.location.href='/menu'">← Back to Menu</button>
+            <div class="header-actions">
+                <button class="btn-create-user" onclick="openCreateUserModal()">➕ Create User</button>
+                <button class="btn-back" onclick="window.location.href='/menu'">← Back to Menu</button>
+            </div>
         </header>
 
         <div class="admin-content">
@@ -74,6 +77,7 @@
                                         <small>View error dashboard</small>
                                     </div>
                                 </th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="usersTableBody">
@@ -86,6 +90,109 @@
 
         <!-- Toast notification -->
         <div id="toast" class="toast"></div>
+
+        <!-- Create User Modal -->
+        <div id="createUserModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>➕ Create New User</h2>
+                    <button class="modal-close" onclick="closeCreateUserModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="createUserForm" onsubmit="handleCreateUser(event)">
+                        <div class="form-group">
+                            <label for="newUserEmail">Email</label>
+                            <input 
+                                type="email" 
+                                id="newUserEmail" 
+                                name="email" 
+                                required 
+                                placeholder="user@example.com"
+                                autocomplete="email"
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label for="newUserPassword">Password</label>
+                            <input 
+                                type="password" 
+                                id="newUserPassword" 
+                                name="password" 
+                                required 
+                                minlength="4"
+                                placeholder="Enter password (min 4 characters)"
+                                autocomplete="new-password"
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label for="newUserConfirmPassword">Confirm Password</label>
+                            <input 
+                                type="password" 
+                                id="newUserConfirmPassword" 
+                                name="confirmPassword" 
+                                required 
+                                minlength="4"
+                                placeholder="Confirm password"
+                                autocomplete="new-password"
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label for="newUserRole">Role</label>
+                            <select id="newUserRole" name="role" required>
+                                <option value="user">User</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn-cancel" onclick="closeCreateUserModal()">Cancel</button>
+                            <button type="submit" class="btn-submit">Create User</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Change Password Modal -->
+        <div id="changePasswordModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>🔐 Change Password</h2>
+                    <button class="modal-close" onclick="closeChangePasswordModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p id="modalUserEmail" class="modal-user-email"></p>
+                    <form id="changePasswordForm" onsubmit="handleChangePassword(event)">
+                        <div class="form-group">
+                            <label for="newPassword">New Password</label>
+                            <input 
+                                type="password" 
+                                id="newPassword" 
+                                name="password" 
+                                required 
+                                minlength="4"
+                                placeholder="Enter new password (min 4 characters)"
+                                autocomplete="new-password"
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label for="confirmPassword">Confirm Password</label>
+                            <input 
+                                type="password" 
+                                id="confirmPassword" 
+                                name="confirmPassword" 
+                                required 
+                                minlength="4"
+                                placeholder="Confirm new password"
+                                autocomplete="new-password"
+                            />
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn-cancel" onclick="closeChangePasswordModal()">Cancel</button>
+                            <button type="submit" class="btn-submit">Change Password</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="script.js"></script>

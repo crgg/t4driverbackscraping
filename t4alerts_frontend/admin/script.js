@@ -139,6 +139,16 @@ function createUserRow(user) {
     tdErrors.appendChild(errorsToggle);
     tr.appendChild(tdErrors);
 
+    // Actions column
+    const tdActions = document.createElement('td');
+    tdActions.className = 'actions-cell';
+    const changePasswordBtn = document.createElement('button');
+    changePasswordBtn.className = 'btn-change-password';
+    changePasswordBtn.textContent = '🔑 Change Password';
+    changePasswordBtn.onclick = () => openChangePasswordModal(user);
+    tdActions.appendChild(changePasswordBtn);
+    tr.appendChild(tdActions);
+
     return tr;
 }
 
@@ -243,4 +253,167 @@ function showToast(message, type = 'success') {
     setTimeout(() => {
         toast.classList.remove('show');
     }, 3000);
+}
+
+/**
+ * Open create user modal
+ */
+function openCreateUserModal() {
+    const modal = document.getElementById('createUserModal');
+    document.getElementById('createUserForm').reset();
+    modal.style.display = 'flex';
+}
+
+/**
+ * Close create user modal
+ */
+function closeCreateUserModal() {
+    const modal = document.getElementById('createUserModal');
+    modal.style.display = 'none';
+    document.getElementById('createUserForm').reset();
+}
+
+/**
+ * Handle create user form submission
+ */
+async function handleCreateUser(event) {
+    event.preventDefault();
+    
+    const email = document.getElementById('newUserEmail').value.trim();
+    const password = document.getElementById('newUserPassword').value;
+    const confirmPassword = document.getElementById('newUserConfirmPassword').value;
+    const role = document.getElementById('newUserRole').value;
+    
+    // Validate passwords match
+    if (password !== confirmPassword) {
+        showToast('Passwords do not match', 'error');
+        return;
+    }
+    
+    // Validate password length
+    if (password.length < 4) {
+        showToast('Password must be at least 4 characters long', 'error');
+        return;
+    }
+    
+    // Validate email
+    if (!email || !email.includes('@')) {
+        showToast('Please enter a valid email address', 'error');
+        return;
+    }
+    
+    try {
+        T4Logger.info(`Creating new user: ${email} with role: ${role}`);
+        
+        // Send request to backend
+        const data = await ApiClient.post('/admin/users', {
+            email: email,
+            password: password,
+            role: role
+        });
+        
+        T4Logger.info(`✅ User created successfully: ${email}`);
+        showToast(`User ${email} created successfully`, 'success');
+        
+        // Close modal
+        closeCreateUserModal();
+        
+        // Reload users list
+        await loadUsers();
+        
+    } catch (error) {
+        T4Logger.error(`Failed to create user: ${error.message}`);
+        
+        // Extract error message from API response if available
+        const errorMessage = error.response?.data?.msg || error.response?.data?.error || error.message;
+        showToast(`Error: ${errorMessage}`, 'error');
+    }
+}
+
+/**
+ * Open change password modal
+ */
+let currentPasswordUserId = null;
+
+function openChangePasswordModal(user) {
+    currentPasswordUserId = user.id;
+    const modal = document.getElementById('changePasswordModal');
+    const userEmail = document.getElementById('modalUserEmail');
+    
+    userEmail.textContent = `User: ${user.email}`;
+    document.getElementById('changePasswordForm').reset();
+    
+    modal.style.display = 'flex';
+}
+
+/**
+ * Close change password modal
+ */
+function closeChangePasswordModal() {
+    const modal = document.getElementById('changePasswordModal');
+    modal.style.display = 'none';
+    currentPasswordUserId = null;
+    document.getElementById('changePasswordForm').reset();
+}
+
+/**
+ * Handle change password form submission
+ */
+async function handleChangePassword(event) {
+    event.preventDefault();
+    
+    if (!currentPasswordUserId) {
+        showToast('Error: No user selected', 'error');
+        return;
+    }
+    
+    const password = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    
+    // Validate passwords match
+    if (password !== confirmPassword) {
+        showToast('Passwords do not match', 'error');
+        return;
+    }
+    
+    // Validate password length
+    if (password.length < 4) {
+        showToast('Password must be at least 4 characters long', 'error');
+        return;
+    }
+    
+    try {
+        T4Logger.info(`Changing password for user ${currentPasswordUserId}`);
+        
+        // Send request to backend
+        await ApiClient.put(`/admin/users/${currentPasswordUserId}/password`, {
+            password: password
+        });
+        
+        T4Logger.info(`✅ Password changed successfully for user ${currentPasswordUserId}`);
+        showToast('Password changed successfully', 'success');
+        
+        // Close modal
+        closeChangePasswordModal();
+        
+    } catch (error) {
+        T4Logger.error(`Failed to change password: ${error.message}`);
+        
+        // Extract error message from API response if available
+        const errorMessage = error.response?.data?.msg || error.message;
+        showToast(`Error: ${errorMessage}`, 'error');
+    }
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const createModal = document.getElementById('createUserModal');
+    const passwordModal = document.getElementById('changePasswordModal');
+    
+    if (event.target === createModal) {
+        closeCreateUserModal();
+    }
+    if (event.target === passwordModal) {
+        closeChangePasswordModal();
+    }
 }

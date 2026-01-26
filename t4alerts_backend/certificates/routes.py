@@ -31,20 +31,35 @@ def get_certificates_status():
         
         results = []
         for domain in all_domains:
-            # We use the new check_domain method that returns a dict
-            status = checker.check_domain(domain)
-            
-            # Add certificate ID and is_dynamic flag
-            is_dynamic = domain in dynamic_domains_map
-            status['id'] = dynamic_domains_map.get(domain, None)
-            status['is_dynamic'] = is_dynamic
-            
-            results.append(status)
+            try:
+                # We use the new check_domain method that returns a dict
+                status = checker.check_domain(domain)
+                
+                # Add certificate ID and is_dynamic flag
+                is_dynamic = domain in dynamic_domains_map
+                status['id'] = dynamic_domains_map.get(domain, None)
+                status['is_dynamic'] = is_dynamic
+                
+                results.append(status)
+            except Exception as domain_error:
+                # Log error but continue with other domains
+                logger.error(f"Error checking domain {domain}: {domain_error}")
+                results.append({
+                    "hostname": domain,
+                    "status": "ERROR",
+                    "days_left": 0,
+                    "expires": "Unknown",
+                    "issuer": "Unknown",
+                    "color": "gray",
+                    "id": dynamic_domains_map.get(domain, None),
+                    "is_dynamic": domain in dynamic_domains_map,
+                    "error": str(domain_error)
+                })
             
         return jsonify(results), 200
     except Exception as e:
-        logger.error(f"Error fetching certificates status: {e}")
-        return jsonify({"error": "Failed to fetch certificates status"}), 500
+        logger.error(f"Error fetching certificates status: {e}", exc_info=True)
+        return jsonify({"error": "Failed to fetch certificates status", "message": str(e)}), 500
 
 @certificates_bp.route('/check', methods=['POST'])
 @jwt_required()

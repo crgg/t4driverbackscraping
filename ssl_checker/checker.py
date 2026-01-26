@@ -1,8 +1,10 @@
 import socket
+import ssl as ssl_lib
 import idna
 import logging
 import pytz
 import os
+import select
 from datetime import datetime
 from OpenSSL import SSL
 from cryptography import x509
@@ -40,13 +42,40 @@ class SSLChecker:
         return list(set(domains))
 
     def get_certificate(self, hostname):
+        """
+        Safely retrieves SSL certificate for a hostname.
+        Returns None on any error to prevent worker crashes.
+        Tries standard library ssl first (more reliable), falls back to OpenSSL if needed.
+        """
+        sock = None
+        sock_ssl = None
         try:
+            # Validate hostname
+            if not hostname or not isinstance(hostname, str):
+                logger.warning(f"Invalid hostname provided: {hostname}")
+                return None
+            
+            # Try using Python's standard ssl library first (more reliable)
+            try:
+                return self._get_certificate_stdlib(hostname)
+            except Exception as stdlib_error:
+                logger.debug(f"Standard library SSL failed for {hostname}, trying OpenSSL: {stdlib_error}")
+                # Fall back to OpenSSL method
+                pass
+                
             hostname_idna = idna.encode(hostname)
-            sock = socket.socket()
-            # sock.settimeout(10) # Removed to prevent OpenSSL.SSL.WantReadError
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            # Use shorter timeout for initial connection (5 seconds)
+            sock.settimeout(5)
+            # Set socket options for better reliability
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
             sock.connect((hostname, self.port))
             peername = sock.getpeername()
+            
+            # Set longer timeout for SSL operations (10 seconds)
+            sock.settimeout(10)
+            
             ctx = SSL.Context(SSL.TLS_CLIENT_METHOD)
             ctx.check_hostname = False
             ctx.verify_mode = SSL.VERIFY_NONE
@@ -60,24 +89,217 @@ class SSLChecker:
             sock_ssl = SSL.Connection(ctx, sock)
             sock_ssl.set_connect_state()
             sock_ssl.set_tlsext_host_name(hostname_idna)
+            
+            # Perform handshake - socket timeout will handle it
+            # If handshake takes too long, socket timeout will raise
             sock_ssl.do_handshake()
+            
             cert = sock_ssl.get_peer_certificate()
             crypto_cert = cert.to_cryptography()
             sock_ssl.close()
             sock.close()
 
             return HostInfo(cert=crypto_cert, peername=peername, hostname=hostname)
+        except (socket.timeout, TimeoutError) as e:
+            logger.warning(f"SSL Connection Timeout for {hostname} after 15s: {e}")
+            if sock:
+                try:
+                    sock.close()
+                except:
+                    pass
+            return None
+        except (socket.gaierror, socket.herror) as e:
+            logger.warning(f"DNS Resolution Failed for {hostname}: {e}")
+            if sock:
+                try:
+                    sock.close()
+                except:
+                    pass
+            return None
+        except (ConnectionRefusedError, ConnectionResetError) as e:
+            logger.warning(f"Connection Refused/Reset for {hostname}: {e}")
+            if sock:
+                try:
+                    sock.close()
+                except:
+                    pass
+            return None
+        except OSError as e:
+            # Catch network unreachable, no route to host, etc.
+            error_code = getattr(e, 'errno', None)
+            if error_code in (101, 111, 113):  # Network unreachable, Connection refused, No route to host
+                logger.warning(f"Network Error for {hostname} (errno {error_code}): {e}")
+            else:
+                logger.warning(f"OS Error for {hostname}: {e}")
+            if sock:
+                try:
+                    sock.close()
+                except:
+                    pass
+            return None
         except SSL.SysCallError as e:
-            logger.warning(f"SSL Connection Failed for {hostname}: Server rejected connection (ECONNRESET/SysCallError).")
+            logger.warning(f"SSL Connection Failed for {hostname}: Server rejected connection (ECONNRESET/SysCallError): {e}")
+            if sock_ssl:
+                try:
+                    sock_ssl.close()
+                except:
+                    pass
+            if sock:
+                try:
+                    sock.close()
+                except:
+                    pass
             return None
         except SSL.WantReadError:
             logger.warning(f"SSL Connection Timeout for {hostname} (WantReadError).")
+            if sock_ssl:
+                try:
+                    sock_ssl.close()
+                except:
+                    pass
+            if sock:
+                try:
+                    sock.close()
+                except:
+                    pass
             return None
-        except socket.timeout:
-            logger.warning(f"SSL Connection Timeout for {hostname} (Socket Timeout).")
+        except KeyboardInterrupt:
+            # Don't catch keyboard interrupts, let them propagate
+            raise
+        except SystemExit:
+            # Don't catch system exits, let them propagate
+            raise
+        except BaseException as e:
+            # Catch all other exceptions including SystemExit-like errors
+            logger.exception(f"ERROR EN GET CERTIFICATE para {hostname}: {type(e).__name__}: {e}")
+            if sock_ssl:
+                try:
+                    sock_ssl.close()
+                except:
+                    pass
+            if sock:
+                try:
+                    sock.close()
+                except:
+                    pass
+            # Always return None instead of raising - this prevents worker crashes
             return None
+    
+    def _get_certificate_stdlib(self, hostname):
+        """
+        Alternative method using Python's standard ssl library.
+        More reliable for network issues.
+        """
+        sock = None
+        try:
+            # Create socket with timeout
+            sock = socket.create_connection((hostname, self.port), timeout=8)
+            peername = sock.getpeername()
+            
+            # Wrap with SSL context
+            context = ssl_lib.create_default_context()
+            context.check_hostname = False
+            context.verify_mode = ssl_lib.CERT_NONE
+            
+            # Create SSL socket
+            ssl_sock = context.wrap_socket(sock, server_hostname=hostname)
+            
+            # Get certificate
+            cert_der = ssl_sock.getpeercert(binary_form=True)
+            crypto_cert = x509.load_der_x509_certificate(cert_der)
+            
+            ssl_sock.close()
+            
+            return HostInfo(cert=crypto_cert, peername=peername, hostname=hostname)
         except Exception as e:
-            logger.exception(f"ERROR EN GET CERTIFICATE para {hostname}")
+            if sock:
+                try:
+                    sock.close()
+                except:
+                    pass
+            raise  # Re-raise to trigger fallback to OpenSSL method
+            logger.warning(f"SSL Connection Timeout for {hostname} after 15s: {e}")
+            if sock:
+                try:
+                    sock.close()
+                except:
+                    pass
+            return None
+        except (socket.gaierror, socket.herror) as e:
+            logger.warning(f"DNS Resolution Failed for {hostname}: {e}")
+            if sock:
+                try:
+                    sock.close()
+                except:
+                    pass
+            return None
+        except (ConnectionRefusedError, ConnectionResetError) as e:
+            logger.warning(f"Connection Refused/Reset for {hostname}: {e}")
+            if sock:
+                try:
+                    sock.close()
+                except:
+                    pass
+            return None
+        except OSError as e:
+            # Catch network unreachable, no route to host, etc.
+            error_code = getattr(e, 'errno', None)
+            if error_code in (101, 111, 113):  # Network unreachable, Connection refused, No route to host
+                logger.warning(f"Network Error for {hostname} (errno {error_code}): {e}")
+            else:
+                logger.warning(f"OS Error for {hostname}: {e}")
+            if sock:
+                try:
+                    sock.close()
+                except:
+                    pass
+            return None
+        except SSL.SysCallError as e:
+            logger.warning(f"SSL Connection Failed for {hostname}: Server rejected connection (ECONNRESET/SysCallError): {e}")
+            if sock_ssl:
+                try:
+                    sock_ssl.close()
+                except:
+                    pass
+            if sock:
+                try:
+                    sock.close()
+                except:
+                    pass
+            return None
+        except SSL.WantReadError:
+            logger.warning(f"SSL Connection Timeout for {hostname} (WantReadError).")
+            if sock_ssl:
+                try:
+                    sock_ssl.close()
+                except:
+                    pass
+            if sock:
+                try:
+                    sock.close()
+                except:
+                    pass
+            return None
+        except KeyboardInterrupt:
+            # Don't catch keyboard interrupts, let them propagate
+            raise
+        except SystemExit:
+            # Don't catch system exits, let them propagate
+            raise
+        except BaseException as e:
+            # Catch all other exceptions including SystemExit-like errors
+            logger.exception(f"ERROR EN GET CERTIFICATE para {hostname}: {type(e).__name__}: {e}")
+            if sock_ssl:
+                try:
+                    sock_ssl.close()
+                except:
+                    pass
+            if sock:
+                try:
+                    sock.close()
+                except:
+                    pass
+            # Always return None instead of raising - this prevents worker crashes
             return None
 
     def get_issuer(self, cert):
@@ -96,7 +318,20 @@ class SSLChecker:
         Does NOT send alerts.
         """
         logger.info(f"Checking SSL for {hostname}...")
-        hostinfo = self.get_certificate(hostname)
+        try:
+            hostinfo = self.get_certificate(hostname)
+        except Exception as e:
+            logger.error(f"Unexpected error in check_domain for {hostname}: {type(e).__name__}: {e}")
+            return {
+                "hostname": hostname,
+                "status": "ERROR",
+                "days_left": 0,
+                "expires": "Unknown",
+                "issuer": "Unknown",
+                "color": "gray",
+                "error": f"Connection failed: {str(e)}"
+            }
+        
         if not hostinfo:
             return {
                 "hostname": hostname,
@@ -104,7 +339,8 @@ class SSLChecker:
                 "days_left": 0,
                 "expires": "Unknown",
                 "issuer": "Unknown",
-                "color": "gray"
+                "color": "gray",
+                "error": "Unable to connect to host or retrieve certificate"
             }
 
         try:

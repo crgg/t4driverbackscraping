@@ -3,7 +3,8 @@ Business logic services for admin operations
 """
 from t4alerts_backend.common.models import User
 from t4alerts_backend.admin.models import UserPermission
-from t4alerts_backend.common.utils import logger
+from t4alerts_backend.common.utils import logger, hash_password
+from t4alerts_backend.backend_registration.factory import UserFactory
 
 
 class PermissionService:
@@ -141,4 +142,107 @@ class PermissionService:
             
         except Exception as e:
             logger.error(f"Error fetching user details for {user_id}: {e}")
+            return None, str(e)
+    
+    @staticmethod
+    def change_user_password(user_id, new_password, admin_user_id=None):
+        """
+        Change a user's password
+        
+        Args:
+            user_id (int): The user ID to update
+            new_password (str): The new password
+            admin_user_id (int, optional): The admin making the change
+            
+        Returns:
+            tuple: (success bool, error message or None)
+        """
+        try:
+            # Validate user exists
+            user = User.query.get(user_id)
+            if not user:
+                logger.warning(f"Attempted to change password for non-existent user {user_id}")
+                return False, "User not found"
+            
+            # Validate password length
+            if len(new_password) < 4:
+                return False, "Password must be at least 4 characters long"
+            
+            # Hash the new password
+            password_hash = hash_password(new_password)
+            
+            # Update password
+            user.password_hash = password_hash
+            from t4alerts_backend.common.database import db
+            db.session.commit()
+            
+            logger.info(f"✅ Password changed for user {user.email} (ID: {user_id}) by admin {admin_user_id}")
+            return True, None
+            
+        except Exception as e:
+            logger.error(f"Error changing password for user {user_id}: {e}")
+            from t4alerts_backend.common.database import db
+            db.session.rollback()
+            return False, str(e)
+    
+    @staticmethod
+    def create_user(email, password, role='user', admin_user_id=None):
+        """
+        Create a new user
+        
+        Args:
+            email (str): User email
+            password (str): User password
+            role (str): User role ('user' or 'admin'), default 'user'
+            admin_user_id (int, optional): The admin creating the user
+            
+        Returns:
+            tuple: (user dict or None, error message or None)
+        """
+        try:
+            # Validate email
+            if not email or not email.strip():
+                return None, "Email is required"
+            
+            # Validate password
+            if not password or len(password) < 4:
+                return None, "Password must be at least 4 characters long"
+            
+            # Validate role
+            if role not in ['user', 'admin']:
+                return None, "Invalid role. Must be 'user' or 'admin'"
+            
+            # Check if user already exists
+            existing_user = User.query.filter_by(email=email.strip()).first()
+            if existing_user:
+                return None, "User with this email already exists"
+            
+            # Create user using factory
+            new_user = UserFactory.create_user(email.strip(), password, role)
+            
+            from t4alerts_backend.common.database import db
+            db.session.add(new_user)
+            db.session.commit()
+            
+            logger.info(f"✅ User created: {email} (role: {role}) by admin {admin_user_id}")
+            
+            # Get user details to return
+            permissions = UserPermission.get_user_permissions(new_user.id)
+            
+            user_data = {
+                'id': new_user.id,
+                'email': new_user.email,
+                'role': new_user.role,
+                'created_at': new_user.created_at.isoformat() if new_user.created_at else None,
+                'permissions': permissions,
+                'has_certificates_access': 'view_certificates' in permissions,
+                'has_errors_access': 'view_errors' in permissions
+            }
+            
+            return user_data, None
+            
+        except Exception as e:
+            logger.error(f"Error creating user: {e}")
+            from t4alerts_backend.common.database import db
+            db.session.rollback()
             return None, str(e)
