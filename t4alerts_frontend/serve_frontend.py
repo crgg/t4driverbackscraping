@@ -3,9 +3,11 @@
 Servidor simple para el frontend con rutas personalizadas.
 Mapea /registration -> frontend_registration/
 Mapea /login -> frontend_login/
+Proxy /api/* requests to backend server
 """
-from flask import Flask, send_from_directory, redirect
+from flask import Flask, send_from_directory, redirect, request, Response
 import os
+import requests
 
 app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable cache for development
@@ -132,6 +134,39 @@ def shared_files(filename):
 def assets_files(filename):
     """Sirve archivos de assets"""
     return send_from_directory(os.path.join(BASE_DIR, 'assets'), filename)
+
+# API Proxy to Backend
+@app.route('/api/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+def proxy_api(path):
+    """
+    Proxy all /api/* requests to the backend server on port 5001
+    This mimics nginx behavior in production
+    """
+    backend_url = f'http://127.0.0.1:5001/api/{path}'
+    
+    # Forward the request to backend
+    try:
+        resp = requests.request(
+            method=request.method,
+            url=backend_url,
+            headers={key: value for key, value in request.headers if key.lower() != 'host'},
+            data=request.get_data(),
+            params=request.args,
+            allow_redirects=False
+        )
+        
+        # Create response with backend's content
+        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+        headers = [(name, value) for name, value in resp.raw.headers.items()
+                   if name.lower() not in excluded_headers]
+        
+        response = Response(resp.content, resp.status_code, headers)
+        return response
+        
+    except Exception as e:
+        print(f"❌ Error proxying to backend: {e}")
+        return {"msg": "Backend connection error"}, 502
+
 
 if __name__ == '__main__':
     print("🚀 Frontend Server iniciado en http://localhost:8000")

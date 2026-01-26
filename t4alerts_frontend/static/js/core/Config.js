@@ -9,7 +9,18 @@ class Config {
         }
         Config.instance = this;
 
-        this.API_BASE_URL = "http://127.0.0.1:5001/api";
+        // Dynamically construct API URL based on current window location
+        // This ensures the frontend works regardless of the server's port/domain
+        const protocol = window.location.protocol; // http: or https:
+        const hostname = window.location.hostname; // e.g., t4alerts.local or 127.0.0.1
+        const port = window.location.port;         // e.g., 8085 or empty string
+
+        // Build base URL with port if it exists
+        const baseUrl = port
+            ? `${protocol}//${hostname}:${port}`
+            : `${protocol}//${hostname}`;
+
+        this.API_BASE_URL = `${baseUrl}/api`;
         this.endpoints = {
             login: `${this.API_BASE_URL}/auth/login`,
             menu: `${this.API_BASE_URL}/menu`,

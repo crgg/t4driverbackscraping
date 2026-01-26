@@ -1,7 +1,16 @@
 class AuthService {
     constructor() {
-        // Points to local backend
-        this.apiEndpoint = "http://127.0.0.1:5001/api/auth";
+        // Dynamically construct API URL based on current window location
+        const protocol = window.location.protocol; // http: or https:
+        const hostname = window.location.hostname; // e.g., t4alerts.local or 127.0.0.1
+        const port = window.location.port;         // e.g., 8085 or empty string
+
+        // Build base URL with port if it exists
+        const baseUrl = port
+            ? `${protocol}//${hostname}:${port}`
+            : `${protocol}//${hostname}`;
+
+        this.apiEndpoint = `${baseUrl}/api/auth`;
     }
 
     async register(email, password) {

@@ -23,10 +23,34 @@ from t4alerts_backend.backend_login import login_bp
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
+    
+    # DEBUG: Print JWT Config
+    print(f"🔧 JWT_SECRET_KEY: {app.config.get('JWT_SECRET_KEY')}")
+    print(f"🔧 JWT_TOKEN_LOCATION: {app.config.get('JWT_TOKEN_LOCATION')}")
+    print(f"🔧 JWT_COOKIE_CSRF_PROTECT: {app.config.get('JWT_COOKIE_CSRF_PROTECT')}")
+
 
     # Initialize Extensions
     db.init_app(app)
     jwt = JWTManager(app)
+    
+    # Custom JWT Error Handlers
+    @jwt.invalid_token_loader
+    def invalid_token_callback(error_string):
+        return {"msg": f"Invalid token: {error_string}", "error": "invalid_token"}, 422
+
+    @jwt.expired_token_loader
+    def expired_token_callback(jwt_header, jwt_payload):
+        return {"msg": "Token has expired", "error": "token_expired"}, 401
+    
+    @jwt.unauthorized_loader
+    def missing_token_callback(error_string):
+        return {"msg": f"Missing Authorization Header: {error_string}", "error": "authorization_header_missing"}, 401
+    
+    @jwt.revoked_token_loader
+    def revoked_token_callback(jwt_header, jwt_payload):
+        return {"msg": "Token has been revoked", "error": "token_revoked"}, 401
+
     # CORS Configuration
     CORS(app, resources={r"/api/*": {"origins": "*"}})
 

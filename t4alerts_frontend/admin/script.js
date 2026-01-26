@@ -55,6 +55,14 @@ async function loadUsers() {
         });
 
         if (!response.ok) {
+            // Handle auth errors (expired or invalid token)
+            if (response.status === 401 || response.status === 422) {
+                T4Logger.warn("Session expired or invalid, redirecting to login");
+                localStorage.removeItem('t4_access_token');
+                window.location.href = '/login';
+                return;
+            }
+
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
