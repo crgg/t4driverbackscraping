@@ -762,6 +762,268 @@ async function handleModalScanAndSave() {
     } catch (e) { alert(e.message); btn.disabled = false; btn.innerText = '🚀 Start Scan'; }
 }
 
+// --- NOTICES VIEW LOGIC ---
+window.loadNoticesView = async function () {
+    const list = document.getElementById('notices-list-container');
+    list.innerHTML = 'Loading dynamic apps...';
+
+    try {
+        const token = localStorage.getItem('t4_access_token');
+        const res = await fetch(window.T4Config.getEndpoint('stats_apps_debug'), {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        const apps = data.apps || [];
+
+        if (apps.length === 0) {
+            list.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">No dynamic apps found. Add one via Custom Scan.</div>';
+            return;
+        }
+
+        list.innerHTML = '';
+
+        // Set default date if needed
+        const picker = document.getElementById('notices-date-picker');
+        if (picker && !picker.value) {
+            picker.value = new Date().toISOString().split('T')[0];
+        }
+
+        apps.forEach(app => {
+            const item = document.createElement('div');
+            item.className = 'history-item clickable-row';
+            item.style.alignItems = 'center';
+            item.style.cursor = 'pointer';
+            item.onclick = (e) => {
+                if (e.target.tagName === 'BUTTON') return;
+                const cb = item.querySelector('.notice-checkbox');
+                cb.checked = !cb.checked;
+                item.style.background = cb.checked ? 'rgba(0, 243, 255, 0.1)' : '';
+            };
+
+            item.innerHTML = `
+                <div style="margin-right: 15px;">
+                    <input type="checkbox" class="notice-checkbox" data-app-key="${app.key}" style="transform: scale(1.5); cursor: pointer;" onclick="event.stopPropagation()">
+                </div>
+                <div style="flex: 1;">
+                    <strong style="font-size: 1.1em; color: white;">${app.name}</strong>
+                    <div style="color: #888; font-size: 0.9em;">Key: ${app.key}</div>
+                </div>
+                <div>
+                    <button class="btn-primary" style="padding: 5px 15px; font-size: 0.85em;" onclick="openNoticesSettings('${app.key}', '${app.name}')">
+                        ⚙️ Configure
+                    </button>
+                    <!-- Bell removed to force bulk action usage -->
+                </div>
+            `;
+            list.appendChild(item);
+        });
+
+    } catch (e) {
+        console.error(e);
+        list.innerHTML = `<div style="color: red;">Error loading apps: ${e.message}</div>`;
+    }
+};
+
+window.triggerManualNoticeForApp = function (appKey) {
+    // Temporarily switch app context to open modal from Notices view
+    window.statsManager.currentAppKey = appKey;
+    window.openManualNoticeModal();
+};
+
+window.sendSelectedNotices = async function () {
+    const checkboxes = document.querySelectorAll('.notice-checkbox:checked');
+    if (checkboxes.length === 0) return alert("Select at least one app.");
+
+    const date = document.getElementById('notices-date-picker').value;
+    if (!date) return alert("Select a date.");
+
+    if (!confirm(`Send notices for ${checkboxes.length} apps for date ${date}?`)) return;
+
+    let sentCount = 0;
+    let errorCount = 0;
+
+    const btn = document.querySelector('button[onclick="sendSelectedNotices()"]');
+    const originalText = btn.innerHTML; // Use innerHTML to preserve icon if we want, or just text?
+    btn.disabled = true;
+
+    for (const cb of checkboxes) {
+        const appKey = cb.dataset.appKey;
+        btn.innerText = `⏳ ${appKey}...`;
+
+        try {
+            const payload = {
+                app_key: appKey,
+                use_template: true,
+                date: date,
+                subject: null, // Let backend generate
+                body: "Bulk Trigger", // Placeholder, ignored due to use_template
+                recipients: null // Use stored defaults
+            };
+
+            const token = localStorage.getItem('t4_access_token');
+            const res = await fetch(window.T4Config.getEndpoint('notifications_send'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) throw new Error("Failed");
+            sentCount++;
+
+        } catch (e) {
+            console.error(`Failed to send for ${appKey}`, e);
+            errorCount++;
+        }
+    }
+
+    btn.innerText = originalText;
+    btn.disabled = false;
+    alert(`Bulk Send Complete.\n✅ Sent: ${sentCount}\n❌ Failed: ${errorCount}`);
+};
+
+window.openNoticesSettings = async function (appKey, appName) {
+    document.getElementById('notices-settings-modal').style.display = 'flex';
+    document.getElementById('ns-app-name').innerText = appName;
+    document.getElementById('ns-app-key').value = appKey;
+    document.getElementById('ns-recipients').value = 'Loading...';
+
+    try {
+        const token = localStorage.getItem('t4_access_token');
+        const res = await fetch(`${window.T4Config.getEndpoint('notifications_settings')}/${appKey}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+
+        let recipientStr = '';
+        if (Array.isArray(data.recipients)) recipientStr = data.recipients.join(', ');
+        else if (typeof data.recipients === 'string') recipientStr = data.recipients;
+
+        document.getElementById('ns-recipients').value = recipientStr;
+        document.getElementById('ns-schedule').checked = !!data.schedule_enabled;
+
+    } catch (e) {
+        console.error(e);
+        document.getElementById('ns-recipients').value = '';
+        alert("Error loading settings: " + e.message);
+    }
+};
+
+window.saveNoticesSettings = async function () {
+    const appKey = document.getElementById('ns-app-key').value;
+    const recipientsRaw = document.getElementById('ns-recipients').value;
+    const scheduleEnabled = document.getElementById('ns-schedule').checked;
+
+    const recipients = recipientsRaw.split(',').map(s => s.trim()).filter(s => s);
+
+    try {
+        const token = localStorage.getItem('t4_access_token');
+        const res = await fetch(`${window.T4Config.getEndpoint('notifications_settings')}/${appKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({
+                recipients: recipients,
+                schedule_enabled: scheduleEnabled
+            })
+        });
+
+        if (res.ok) {
+            alert("Settings saved!");
+            document.getElementById('notices-settings-modal').style.display = 'none';
+        } else {
+            throw new Error("Failed to save");
+        }
+    } catch (e) {
+        alert("Error: " + e.message);
+    }
+};
+
+window.toggleEmailBody = function (checked) {
+    const bodyField = document.getElementById('email-body');
+    const subjectField = document.getElementById('email-subject');
+    if (checked) {
+        bodyField.disabled = true;
+        bodyField.value = 'Standard Report Template will be used (auto-generated from logs).';
+        bodyField.style.opacity = '0.5';
+        // Optional: clear subject to let backend generate it? Or just keep current.
+    } else {
+        bodyField.disabled = false;
+        bodyField.value = window.currentEmailContext && window.currentEmailContext.isManual
+            ? `This is a manual notice for ${window.currentEmailContext.appKey || 'app'}.`
+            : '';
+        bodyField.style.opacity = '1';
+    }
+};
+
+window.openManualNoticeModal = function () {
+    const appKey = window.statsManager.currentAppKey;
+    if (!appKey) return alert("Select an app first");
+
+    // Reuse email modal but set context
+    document.getElementById('email-modal').style.display = 'flex';
+    document.getElementById('email-modal-title').innerText = '🔔 Send Manual Notice';
+    document.getElementById('email-to').value = '';
+    document.getElementById('email-subject').value = `Manual Notice: ${appKey}`;
+
+    // Set Default State
+    const useTemplate = true;
+    document.getElementById('email-use-template').checked = useTemplate;
+    window.toggleEmailBody(useTemplate);
+
+    // Set context to null timestamp implies Manual Notice
+    window.currentEmailContext = { appKey, timestamp: null, isManual: true };
+
+    // Attempt to pre-fill recipients
+    fetch(`${window.T4Config.getEndpoint('notifications_settings')}/${appKey}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('t4_access_token')}` }
+    }).then(r => r.json()).then(data => {
+        if (data && data.recipients && data.recipients.length > 0) {
+            document.getElementById('email-to').value = data.recipients.join(', ');
+        }
+    }).catch(e => console.log("Could not prefill addresses", e));
+};
+
+// Modifying submitErrorEmail to handle manual notice routing
+const originalSubmitEmail = window.submitErrorEmail;
+window.submitErrorEmail = async function () {
+    if (window.currentEmailContext && window.currentEmailContext.isManual) {
+        const btn = document.getElementById('btn-submit-email');
+        btn.innerText = 'Sending Notice...';
+
+        const payload = {
+            app_key: window.currentEmailContext.appKey,
+            recipients: document.getElementById('email-to').value.split(',').map(s => s.trim()),
+            subject: document.getElementById('email-subject').value,
+            body: document.getElementById('email-body').value,
+            use_template: document.getElementById('email-use-template').checked,
+            date: window.statsManager.currentDate // Required for template
+        };
+
+        try {
+            const token = localStorage.getItem('t4_access_token');
+            const res = await fetch(window.T4Config.getEndpoint('notifications_send'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                btn.innerText = 'Sent!';
+                alert(`Notice sent to: ${data.recipients.join(', ')}`);
+                setTimeout(closeEmailModal, 1000);
+            } else {
+                throw new Error("Failed to send notice");
+            }
+        } catch (e) {
+            btn.innerText = 'Send Email';
+            alert("Error sending notice: " + e.message);
+        }
+        return;
+    }
+
+    // Fallback to original
+    originalSubmitEmail();
+};
 async function saveCurrentAppConfig() {
     const saveBtn = document.getElementById('btn-save-app');
     const fields = ['m-scan-app-key', 'm-scan-app-name', 'm-scan-base-url', 'm-scan-login-path', 'm-scan-logs-path', 'm-scan-username', 'm-scan-password'];

@@ -28,6 +28,7 @@ services:
       - PGUSER=postgres
       - PGPASSWORD=logs_password
       - PGDATABASE=postgres
+      - PYTHONUNBUFFERED=1
       # Pass through other env vars if needed or use env_file
     env_file:
       - .env

@@ -75,6 +75,10 @@ def create_app():
     from t4alerts_backend.stats import stats_bp
     app.register_blueprint(stats_bp, url_prefix='/api/stats')
     
+    # Notifications Blueprint
+    from t4alerts_backend.notifications.routes import notifications_bp
+    app.register_blueprint(notifications_bp, url_prefix='/api/notifications')
+
     # Error History Blueprint (PRD 2.0)
     from t4alerts_backend.error_history.routes import error_history_bp
     app.register_blueprint(error_history_bp, url_prefix='/api/error-history')
@@ -85,6 +89,7 @@ def create_app():
         from t4alerts_backend.admin.models import UserPermission
         from t4alerts_backend.apps_manager.models import MonitoredApp
         from t4alerts_backend.certificates.models import SSLCertificate
+        from t4alerts_backend.notifications.models import NotificationSettings
         
         db.create_all()
         

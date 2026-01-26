@@ -1,0 +1,15 @@
+{
+    "name": "t4alerts-frontend",
+    "version": "2.0.0",
+    "description": "T4 Alerts Frontend - SSL Certificate and Error Monitoring",
+    "main": "serve_frontend.py",
+    "scripts": {
+        "install-deps": "npm install"
+    },
+    "dependencies": {
+        "axios": "^1.6.5"
+    },
+    "devDependencies": {},
+    "author": "T4 Alerts Team",
+    "license": "ISC"
+}

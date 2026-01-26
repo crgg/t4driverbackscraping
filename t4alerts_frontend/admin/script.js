@@ -45,28 +45,9 @@ async function loadUsers() {
     usersTable.style.display = 'none';
 
     try {
-        const token = localStorage.getItem('t4_access_token');
-        const response = await fetch(`${T4Config.API_BASE_URL}/admin/users`, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
-        });
+        // Use ApiClient to fetch users
+        const data = await ApiClient.get('/admin/users');
 
-        if (!response.ok) {
-            // Handle auth errors (expired or invalid token)
-            if (response.status === 401 || response.status === 422) {
-                T4Logger.warn("Session expired or invalid, redirecting to login");
-                localStorage.removeItem('t4_access_token');
-                window.location.href = '/login';
-                return;
-            }
-
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        const data = await response.json();
         allUsers = data.users || [];
 
         T4Logger.info(`Loaded ${allUsers.length} users`);
@@ -83,6 +64,9 @@ async function loadUsers() {
 
         loadingState.style.display = 'none';
         errorState.style.display = 'block';
+
+        // Note: ApiClient already handles 401/422 redirects automatically
+        // So we only reach here for other errors (500, network issues, etc.)
     }
 }
 
@@ -211,25 +195,10 @@ async function handlePermissionToggle(userId, permissionName, isGranted) {
             newPermissions = newPermissions.filter(p => p !== permissionName);
         }
 
-        // Send update to backend
-        const token = localStorage.getItem('t4_access_token');
-        const response = await fetch(`${T4Config.API_BASE_URL}/admin/users/${userId}/permissions`, {
-            method: 'PUT',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                permissions: newPermissions
-            })
+        // Send update to backend using ApiClient
+        const data = await ApiClient.put(`/admin/users/${userId}/permissions`, {
+            permissions: newPermissions
         });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.msg || 'Failed to update permissions');
-        }
-
-        const data = await response.json();
 
         // Update local user data
         const userIndex = allUsers.findIndex(u => u.id === userId);
@@ -247,7 +216,10 @@ async function handlePermissionToggle(userId, permissionName, isGranted) {
 
     } catch (error) {
         T4Logger.error(`Failed to update permissions: ${error.message}`);
-        showToast(`Error: ${error.message}`, 'error');
+
+        // Extract error message from API response if available
+        const errorMessage = error.response?.data?.msg || error.message;
+        showToast(`Error: ${errorMessage}`, 'error');
 
         // Reload users to reset UI state
         await loadUsers();

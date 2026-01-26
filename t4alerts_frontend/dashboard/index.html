@@ -42,6 +42,9 @@
                 <div class="nav-item" onclick="ViewFactory.navigateTo('error-history')">
                     <span class="icon">🕒</span> Error History
                 </div>
+                <div class="nav-item" onclick="ViewFactory.navigateTo('notices')">
+                    <span class="icon">🔔</span> Notices
+                </div>
                 <div class="nav-item" onclick="ViewFactory.navigateTo('custom-scan')">
                     <span class="icon">⚡</span> Custom Scan
                 </div>
@@ -127,7 +130,11 @@
                 </div>
 
                 <!-- Search Bar -->
-                <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
+                <div style="display: flex; justify-content: flex-end; margin-bottom: 15px; gap: 10px;">
+                    <button onclick="openManualNoticeModal()" class="tab-btn"
+                        style="border: 1px solid var(--neon-blue); color: var(--neon-blue);">
+                        🔔 Manual Notice
+                    </button>
                     <input type="text" id="app-search-input" placeholder="🔍 Search errors (SQL, type, message...)"
                         onkeyup="filterAppErrors()"
                         style="padding: 10px 15px; width: 350px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; outline: none;">
@@ -221,6 +228,29 @@
                 </div>
             </div>
 
+            <!-- Notices View -->
+            <div id="view-notices" style="display: none;">
+                <div class="charts-grid">
+                    <div class="chart-card large">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <div>
+                                <h3>Scheduled Dynamic Scans</h3>
+                                <p style="color: #888;">Manage notifications and schedules for your dynamic apps.</p>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <input type="date" id="notices-date-picker" class="dark-input" style="padding: 8px;">
+                                <button onclick="sendSelectedNotices()" class="btn-primary"
+                                    style="padding: 8px 15px; background: rgba(255, 191, 0, 0.2); color: #ffbf00; border: 1px solid #ffbf00;">
+                                    🔔 Trigger Notices
+                                </button>
+                            </div>
+                        </div>
+                        <div id="notices-list-container">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Notifications Feed (Keep on Overview) -->
             <div class="notifications-section" id="feed-container" style="display: none;">
                 <h3>Recent Alerts Feed</h3>
@@ -260,6 +290,11 @@
             <div class="input-group">
                 <label for="email-to">Recipients (comma separated):</label>
                 <input type="text" id="email-to" placeholder="user@example.com, admin@example.com" class="dark-input">
+            </div>
+
+            <div class="input-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+                <input type="checkbox" id="email-use-template" checked onchange="toggleEmailBody(this.checked)">
+                <label for="email-use-template" style="margin-bottom: 0;">Use Standard Report Template</label>
             </div>
 
             <div class="input-group">
@@ -353,6 +388,33 @@
                     <button type="submit" class="btn-modal-save" id="btn-modal-start">🚀 Start Scan</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Notices Settings Modal -->
+    <div id="notices-settings-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2>🔔 Notification Settings</h2>
+            <p id="ns-app-name" style="color: var(--neon-blue); margin-bottom: 15px;"></p>
+            <input type="hidden" id="ns-app-key">
+
+            <div class="input-group">
+                <label>Recipients (Email addresses, comma separated)</label>
+                <input type="text" id="ns-recipients" class="dark-input"
+                    placeholder="user@example.com, admin@example.com">
+                <small style="color: #666;">Future: SMS numbers support coming soon</small>
+            </div>
+
+            <div class="input-group" style="display: flex; align-items: center; gap: 10px; margin-top: 15px;">
+                <input type="checkbox" id="ns-schedule" style="width: auto;">
+                <label for="ns-schedule" style="margin-bottom: 0;">Enable Scheduled Scans (Every 24h)</label>
+            </div>
+
+            <div class="modal-actions">
+                <button onclick="document.getElementById('notices-settings-modal').style.display='none'"
+                    class="btn-cancel">Cancel</button>
+                <button onclick="saveNoticesSettings()" class="btn-send">💾 Save Settings</button>
+            </div>
         </div>
     </div>
 

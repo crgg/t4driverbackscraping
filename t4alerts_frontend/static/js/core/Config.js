@@ -32,7 +32,11 @@ class Config {
             stats_send_email: `${this.API_BASE_URL}/stats/send-email`,
             error_history: `${this.API_BASE_URL}/error-history/`,
             error_history_scan: `${this.API_BASE_URL}/error-history/scan`,
-            apps: `${this.API_BASE_URL}/apps`
+            error_history: `${this.API_BASE_URL}/error-history/`,
+            error_history_scan: `${this.API_BASE_URL}/error-history/scan`,
+            apps: `${this.API_BASE_URL}/apps`,
+            notifications_settings: `${this.API_BASE_URL}/notifications/settings`,
+            notifications_send: `${this.API_BASE_URL}/notifications/send`
         };
     }
 

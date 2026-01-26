@@ -44,6 +44,19 @@ class ViewFactory {
                     modalDate.value = today;
                 }
                 break;
+            case 'notices':
+                // SPA navigation pattern
+                window.history.pushState({ page: 'notices' }, '', '/errors/notices');
+
+                document.querySelectorAll('main > div').forEach(div => div.style.display = 'none');
+                document.querySelector('main > header').style.display = 'flex';
+                document.getElementById('view-notices').style.display = 'block';
+                document.getElementById('page-title').innerText = 'Notices Management';
+
+                if (window.loadNoticesView) {
+                    window.loadNoticesView();
+                }
+                break;
             case 'errors':
                 window.location.href = '/errors';
                 break;

@@ -130,14 +130,25 @@ def get_apps_config_from_db() -> Dict[str, Dict]:
         return {}
 
 
-def get_apps_config(dynamic_only: bool = False, quiet: bool = False) -> Dict[str, Dict]:
+def get_apps_config(dynamic_only: bool = False, static_only: bool = False, quiet: bool = False) -> Dict[str, Dict]:
     """
     Get app configuration with modular approach:
     - dynamic_only=True (Web): Returns ONLY apps from DB (saved via Custom Scan)
-    - dynamic_only=False (Automation): Returns legacy static apps + DB apps
+    - static_only=True (Automation): Returns ONLY legacy static apps (ignores DB)
+    - Both False: Returns legacy static apps + DB apps (merged)
     """
-    global _DYNAMIC_CACHE, _LAST_CACHE_TIME
+    global _DYNAMIC_CACHE, _LAST_CACHE_TIME, APPS_CONFIG
     import time
+    
+    # 0. Static Only Mode (Automation)
+    if static_only:
+        legacy = _get_legacy_converted()
+        if not quiet:
+            print(f"  ✅ Config: Loaded {len(legacy)} static apps (ignoring dynamic DB apps).")
+        
+        # Update global cache for performance (only static ones)
+        APPS_CONFIG.update(legacy)
+        return legacy
     
     now = time.time()
     
@@ -151,7 +162,6 @@ def get_apps_config(dynamic_only: bool = False, quiet: bool = False) -> Dict[str
     _LAST_CACHE_TIME = now
     
     # Update global reference for any direct access
-    global APPS_CONFIG
     
     # 3. If Web mode (dynamic only), return DB apps (or empty if none)
     if dynamic_only:
@@ -159,7 +169,7 @@ def get_apps_config(dynamic_only: bool = False, quiet: bool = False) -> Dict[str
             print(f"  ✅ Config: Loaded {len(db_config)} dynamic apps from database.")
         return db_config
     
-    # 4. Automation mode (CLI/Main.py): Merge legacy + DB
+    # 4. Merged mode: Merge legacy + DB
     legacy_converted = _get_legacy_converted()
     merged = {**legacy_converted, **db_config}
     

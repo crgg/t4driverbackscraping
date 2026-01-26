@@ -191,6 +191,27 @@ def _get_subject(app_key: str, dia: date) -> str:
     return f"🔥 {base}"
 
 
+def _get_sender_name(app_key: str, subject: str) -> str:
+    """
+    Determina el nombre del remitente basado en la app.
+    """
+    sender_name = "driverapp-logs" # Default
+    
+    # Caso especial para KLC Crossdock y T4TMS Backend
+    if app_key == "klc_crossdock":
+        sender_name = "klc-crossdock-logs"
+    elif app_key == "t4tms_backend":
+        sender_name = "t4tms"
+    elif "T4APP" in subject:
+        sender_name = "t4app-logs"
+    elif "BROKER" in subject:
+        sender_name = "broker-logs"
+    elif "DRIVERAPP" in subject:
+        sender_name = "driverapp-logs"
+        
+    return sender_name
+
+
 def enviar_resumen_por_correo(dia: date, app_name: str = "DriverApp GO2", app_key: str = "driverapp_goto") -> None:
     """
     Envía el resumen de errores por correo.
@@ -207,21 +228,7 @@ def enviar_resumen_por_correo(dia: date, app_name: str = "DriverApp GO2", app_ke
         return
 
     subject = _get_subject(app_key, dia)
-
-    # Determinar sender_name
-    sender_name = "driverapp-logs" # Default
-    
-    # Caso especial para KLC Crossdock y T4TMS Backend
-    if app_key == "klc_crossdock":
-        sender_name = "klc-crossdock-logs"
-    elif app_key == "t4tms_backend":
-        sender_name = "t4tms"
-    elif "T4APP" in subject:
-        sender_name = "t4app-logs"
-    elif "BROKER" in subject:
-        sender_name = "broker-logs"
-    elif "DRIVERAPP" in subject:
-        sender_name = "driverapp-logs"
+    sender_name = _get_sender_name(app_key, subject)
 
     recipients = default_recipients()  # usa ALERT_EMAIL_TO o MAIL_USERNAME
 

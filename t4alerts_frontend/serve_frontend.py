@@ -118,6 +118,24 @@ def admin_files(filename):
 #     """Sirve archivos estáticos de apps"""
 #     return send_from_directory(os.path.join(BASE_DIR, 'apps'), filename)
 
+# Sirve archivos JavaScript del módulo API (ANTES del proxy)
+# IMPORTANTE: Esta ruta debe estar ANTES de /api/<path:path> para evitar conflictos
+@app.route('/api/<path:filename>')
+def api_files(filename):
+    """
+    Sirve archivos JavaScript del módulo API.
+    Solo sirve archivos .js, todo lo demás va al proxy del backend.
+    """
+    # Solo servir archivos .js de la carpeta api/
+    if filename.endswith('.js'):
+        try:
+            return send_from_directory(os.path.join(BASE_DIR, 'api'), filename)
+        except:
+            pass  # Si no existe, dejar que el proxy lo maneje
+    
+    # Si no es un archivo .js, pasar al proxy del backend
+    return proxy_api(filename)
+
 # Sirve archivos estáticos globales (static/js/core, etc)
 @app.route('/static/<path:filename>')
 def static_files(filename):
@@ -136,7 +154,8 @@ def assets_files(filename):
     return send_from_directory(os.path.join(BASE_DIR, 'assets'), filename)
 
 # API Proxy to Backend
-@app.route('/api/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+# NOTA: Esta ruta debe estar DESPUÉS de api_files() para que .js se sirvan primero
+@app.route('/api/<path:path>', methods=['POST', 'PUT', 'DELETE', 'PATCH'])
 def proxy_api(path):
     """
     Proxy all /api/* requests to the backend server on port 5001

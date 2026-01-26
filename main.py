@@ -52,13 +52,13 @@ def main() -> None:
         from t4alerts_backend.app import create_app
         flask_app = create_app()
         with flask_app.app_context():
-            apps_config = get_apps_config(dynamic_only=False)
+            apps_config = get_apps_config(static_only=True)
     except Exception as e:
         print(f"⚠️ Info: Running without Flask context. Attempting static loading fallback. Error: {e}")
         # Fallback to static config from app.config
         try:
             # get_apps_config is already imported at top level
-            apps_config = get_apps_config(dynamic_only=False)
+            apps_config = get_apps_config(static_only=True)
         except:
             from app.config import APPS_CONFIG_LEGACY
             apps_config = APPS_CONFIG_LEGACY
