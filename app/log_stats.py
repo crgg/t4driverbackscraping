@@ -247,3 +247,48 @@ def get_daily_errors(
     results.sort(key=lambda x: x["first_time"])
     
     return results
+
+
+def parse_and_aggregate_log_lines(lines: List[str], dia: date) -> List[Dict]:
+    """
+    Parsea una lista de strings de log y devuelve errores agregados por firma.
+    Versión en memoria de get_daily_errors, útil cuando ya tenemos los logs en memoria.
+    
+    Args:
+        lines: lista de strings con formato "ERROR - env - date - msg"
+        dia: fecha para filtrar (aunque normalmente los logs ya vendrán filtrados)
+    
+    Returns:
+        Lista de dicts con firma, full_content, count, first_time
+    """
+    errors_map = {} # firma -> {first_time: dt, count: int, full_content: str}
+    
+    for line in lines:
+        data = _parse_log_line(line)
+        if not data:
+            continue
+        
+        dt = data["fecha"]
+        # Filtrar por seguridad, aunque la capa de scraping ya debería haberlo hecho
+        if dt.date() != dia:
+            continue
+            
+        firma = _firma_mensaje(data["mensaje"])
+        
+        if firma not in errors_map:
+            errors_map[firma] = {
+                "firma": firma,
+                "full_content": data["mensaje"],
+                "first_time": dt,
+                "count": 0
+            }
+        
+        errors_map[firma]["count"] += 1
+        
+        # Quedarse con el timestamp más antiguo
+        if dt < errors_map[firma]["first_time"]:
+             errors_map[firma]["first_time"] = dt
+             
+    results = list(errors_map.values())
+    results.sort(key=lambda x: x["first_time"])
+    return results

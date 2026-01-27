@@ -395,15 +395,37 @@ function escapeHtml(text) {
     return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
 
+window.toggleSidebar = function () {
+    const sidebar = document.querySelector('.sidebar');
+    const toggleBtn = document.getElementById('sidebar-toggle');
+
+    if (sidebar) {
+        sidebar.classList.toggle('collapsed');
+        const isCollapsed = sidebar.classList.contains('collapsed');
+
+        // Update Arrow Icon
+        if (toggleBtn) {
+            // If collapsed, arrow points right (to open)
+            // If open, arrow points left (to collapse)
+            toggleBtn.innerHTML = isCollapsed ? '&#9654;' : '&#9664;';
+        }
+    }
+};
+
 window.toggleAccordion = async function (id) {
     const content = document.getElementById(id);
     const header = document.getElementById('accordion-stats');
+    const arrow = document.getElementById('stats-accordion-arrow');
+
     if (content.style.maxHeight) {
         content.style.maxHeight = null;
         header.classList.remove('active');
+        if (arrow) arrow.innerHTML = '&#9660;'; // Down (Show)
         return;
     }
     header.classList.add('active');
+    if (arrow) arrow.innerHTML = '&#9650;'; // Up (Hide)
+
     if (!window.appsLoaded && window.statsManager) {
         await window.statsManager.loadAppsList();
         window.appsLoaded = true;
@@ -486,8 +508,12 @@ class DashboardView {
             // Open the accordion
             const content = document.getElementById('stats-content');
             const header = document.getElementById('accordion-stats');
+            const arrow = document.getElementById('stats-accordion-arrow');
+
             if (content && header) {
                 header.classList.add('active');
+                if (arrow) arrow.innerHTML = '&#9650;'; // Up (Hide)
+
                 // Wait a bit for DOM to settle if needed, but scrollHeight should work
                 setTimeout(() => {
                     content.style.maxHeight = content.scrollHeight + "px";
@@ -763,6 +789,8 @@ async function handleModalScanAndSave() {
 }
 
 // --- NOTICES VIEW LOGIC ---
+// --- NOTICES VIEW LOGIC ---
+/*
 window.loadNoticesView = async function () {
     const list = document.getElementById('notices-list-container');
     list.innerHTML = 'Loading dynamic apps...';
@@ -936,6 +964,7 @@ window.saveNoticesSettings = async function () {
         alert("Error: " + e.message);
     }
 };
+*/
 
 window.toggleEmailBody = function (checked) {
     const bodyField = document.getElementById('email-body');
@@ -1078,7 +1107,23 @@ async function executeCustomScanFromPayload(payload, date) {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ ...payload, date })
     });
-    if (!apiRes.ok) throw new Error("Scan failed");
+
+    if (!apiRes.ok) {
+        let errorMsg = "Scan failed";
+        try {
+            const errData = await apiRes.json();
+            if (errData.detail) errorMsg = errData.detail;
+            else if (errData.error) errorMsg = errData.error;
+        } catch (e) { /* use default */ }
+
+        if (apiRes.status === 401) {
+            throw new Error(`⚠️ Authentication Failed\n\n${errorMsg}`);
+        } else if (apiRes.status === 503 || apiRes.status === 504) {
+            throw new Error(`⚠️ Connection Failed\n\n${errorMsg}`);
+        } else {
+            throw new Error(errorMsg);
+        }
+    }
     const data = await apiRes.json();
     renderCustomScanResults(data);
 }

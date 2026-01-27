@@ -9,7 +9,7 @@ from requests.auth import HTTPBasicAuth
 from .config import get_app_credentials, get_app_urls
 
 
-def create_logged_session(app_key: str = "driverapp_goto", max_retries: int = 3) -> requests.Session:
+def create_logged_session(app_key: str = "driverapp_goto", max_retries: int = 3, timeout: int = None) -> requests.Session:
     """
     Crea una sesión autenticada para una aplicación específica con retry logic.
     
@@ -22,6 +22,7 @@ def create_logged_session(app_key: str = "driverapp_goto", max_retries: int = 3)
     Args:
         app_key: clave de la aplicación en APPS_CONFIG (default: 'driverapp_goto')
         max_retries: número máximo de intentos de conexión (default: 3)
+        timeout: timeout de lectura en segundos (default: None -> usa defaults internos)
     
     Returns:
         requests.Session autenticada
@@ -40,16 +41,16 @@ def create_logged_session(app_key: str = "driverapp_goto", max_retries: int = 3)
     # Priority: auth_type field > hardcoded app_key checks
     if auth_type == 'jwt_api':
         # JWT API authentication (T4App Admin and any ad-hoc T4App scans)
-        return _create_jwt_api_session(app_key, max_retries)
+        return _create_jwt_api_session(app_key, max_retries, timeout)
     elif app_key == "t4tms_backend":
         # HTTP Basic Auth (T4TMS Backend)
-        return _create_basic_auth_session(app_key, max_retries)
+        return _create_basic_auth_session(app_key, max_retries, timeout)
     else:
         # Traditional form-based login (most apps)
-        return _create_form_login_session(app_key, max_retries)
+        return _create_form_login_session(app_key, max_retries, timeout)
 
 
-def _create_basic_auth_session(app_key: str, max_retries: int = 3) -> requests.Session:
+def _create_basic_auth_session(app_key: str, max_retries: int = 3, timeout: int = None) -> requests.Session:
     """
     Creates a session with HTTP Basic Authentication for T4TMS backend.
     Authentication happens directly on the /logs endpoint.
@@ -76,7 +77,9 @@ def _create_basic_auth_session(app_key: str, max_retries: int = 3) -> requests.S
     session.mount("https://", adapter)
     
     # Test authentication by accessing /logs
-    TIMEOUT = (10, 30)
+    # Default TIMEOUT: 10s connect, 60s read. Or use custom.
+    TIMEOUT = (10, timeout if timeout else 60)
+    
     last_exception = None
     retry_delays = [5, 10, 20]
     
@@ -111,7 +114,7 @@ def _create_basic_auth_session(app_key: str, max_retries: int = 3) -> requests.S
     ) from last_exception
 
 
-def _create_jwt_api_session(app_key: str, max_retries: int = 3) -> requests.Session:
+def _create_jwt_api_session(app_key: str, max_retries: int = 3, timeout: int = None) -> requests.Session:
     """
     Creates a session with JWT API authentication for T4App Admin.
     Authentication happens via POST to /api/login which returns a JWT token.
@@ -135,7 +138,7 @@ def _create_jwt_api_session(app_key: str, max_retries: int = 3) -> requests.Sess
     session.mount("https://", adapter)
     
     # Test authentication by logging in and getting JWT token
-    TIMEOUT = (10, 30)
+    TIMEOUT = (10, timeout if timeout else 30)
     last_exception = None
     retry_delays = [5, 10, 20]
     
@@ -196,7 +199,7 @@ def _create_jwt_api_session(app_key: str, max_retries: int = 3) -> requests.Sess
     ) from last_exception
 
 
-def _create_form_login_session(app_key: str, max_retries: int = 3) -> requests.Session:
+def _create_form_login_session(app_key: str, max_retries: int = 3, timeout: int = None) -> requests.Session:
     """
     Creates a session with traditional form-based login.
     Used for most applications (GoTo, GoExperior, KLC, etc.)
@@ -208,7 +211,7 @@ def _create_form_login_session(app_key: str, max_retries: int = 3) -> requests.S
     
     # Configuración de timeouts
     # (connect_timeout, read_timeout) en segundos
-    TIMEOUT = (10, 60)
+    TIMEOUT = (10, timeout if timeout else 60)
     
     # Configuración de retry con backoff exponencial
     retry_delays = [5, 10, 20]  # segundos entre intentos
@@ -220,6 +223,7 @@ def _create_form_login_session(app_key: str, max_retries: int = 3) -> requests.S
             session = requests.Session()
             
             # Configurar retry automático para HTTP adapter
+            # Note: total=0 means reliance on our manual loop unless we want adapter retries too
             retry_strategy = Retry(
                 total=2,  # reintentos automáticos por request
                 backoff_factor=1,

@@ -104,7 +104,12 @@ def _html_lista_errores(titulo: str, errors: List[dict], empty_msg: str = "Sin e
     return "\n".join(lineas)
 
 
-def construir_html_resumen(dia: date, app_name: str = "DriverApp GO2", app_key: str = "driverapp_goto") -> tuple[str, int, int]:
+def construir_html_resumen(
+    dia: date, 
+    app_name: str = "DriverApp GO2", 
+    app_key: str = "driverapp_goto",
+    forced_data: dict = None
+) -> tuple[str, int, int]:
     """
     Construye el HTML del resumen de errores con el nuevo formato.
     
@@ -112,18 +117,24 @@ def construir_html_resumen(dia: date, app_name: str = "DriverApp GO2", app_key: 
         dia: fecha del reporte
         app_name: nombre de la aplicación
         app_key: clave de la aplicación
+        forced_data: (opcional) dict con keys 'nc_errors', 'c_errors' (listas ya parseadas)
+                     Si se provee, se usa en lugar de leer archivos.
     
     Returns:
         (html_content, total_no_controlados, total_controlados)
     """
-    from .log_stats import get_daily_errors
-    
-    # Obtener rutas específicas de la app
-    no_controlados_path, controlados_path = _get_log_paths(app_key)
-    
-    # Usar get_daily_errors
-    nc_errors = get_daily_errors(no_controlados_path, dia)
-    c_errors = get_daily_errors(controlados_path, dia)
+    if forced_data:
+        nc_errors = forced_data.get('nc_errors', [])
+        c_errors = forced_data.get('c_errors', [])
+    else:
+        from .log_stats import get_daily_errors
+        
+        # Obtener rutas específicas de la app
+        no_controlados_path, controlados_path = _get_log_paths(app_key)
+        
+        # Usar get_daily_errors
+        nc_errors = get_daily_errors(no_controlados_path, dia)
+        c_errors = get_daily_errors(controlados_path, dia)
     
     total_nc = sum(e["count"] for e in nc_errors)
     total_c = sum(e["count"] for e in c_errors)

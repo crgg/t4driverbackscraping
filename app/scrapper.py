@@ -10,7 +10,7 @@ from app.writer import save_logs
 from app.error_filter import dividir_nuevos_y_avisados
 
 
-def procesar_aplicacion(app_key: str, fecha_str: str, dia: date) -> Dict[str, Any]:
+def procesar_aplicacion(app_key: str, fecha_str: str, dia: date, max_retries: int = 3, timeout: int = None) -> Dict[str, Any]:
     """
     Hace el scraping, clasificación y guardado de logs
     para una aplicación, PERO NO ENVÍA CORREOS.
@@ -24,7 +24,7 @@ def procesar_aplicacion(app_key: str, fecha_str: str, dia: date) -> Dict[str, An
     print(f"{'='*70}")
 
     # 1) Scrapping de logs
-    with create_logged_session(app_key) as session:
+    with create_logged_session(app_key, max_retries=max_retries, timeout=timeout) as session:
         html = fetch_logs_html(session, fecha_str, app_key)
 
         # DEBUG - Guardar HTML de debug (con sufijo de app para diferenciarlo)

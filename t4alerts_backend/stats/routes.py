@@ -1,4 +1,20 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app, current_app
+from flask_jwt_extended import jwt_required
+import sys
+import os
+from pathlib import Path
+from datetime import datetime
+import logging
+
+# ... (omitted imports logic remains same in file, just showing diff for tool) 
+
+# Note: The tool replaces CONTIGUOUS blocks. I should do it in chunks or one big replacement if close.
+# They are far apart. I will use multi_replace_file_content instead or separate calls.
+# Wait, I can use replace_file_content if I target the specific functions.
+# Let's start with imports.
+
+# Actually, I'll use multi_replace_file_content for cleanliness.
+
 from flask_jwt_extended import jwt_required
 import sys
 import os
@@ -72,11 +88,77 @@ def debug_stats_view(app_key):
 def get_app_stats(app_key):
     """
     Returns logs and statistics for a specific app and date.
-    Reads from log files in salida_logs/ directory.
-    Query Params: ?date=YYYY-MM-DD (default: today)
+    Uses Streaming Response to avoid 504 Gateway Timeout.
     """
+    from flask import Response, stream_with_context, request
+    import json
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+    
     date_str = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
-    return get_app_stats_logic(app_key, date_str)
+    logger.info(f"⚡ RECEIVED STATS VIEW REQUEST for {app_key} on {date_str} (STREAMING)")
+    
+    def generate():
+        # Flush buffer immediately with 2KB of spaces
+        yield " " * 2048
+        
+        # Setup Executor
+        executor = ThreadPoolExecutor(max_workers=1)
+        
+        # Capture real app object to pass context to thread
+        app = current_app._get_current_object()
+        
+        def run_logic():
+            # Call the existing logic which does scraping or file reading
+            # It returns (response_object, status_code)
+            with app.app_context():
+                return get_app_stats_logic(app_key, date_str)
+
+        future = executor.submit(run_logic)
+        
+        # Heartbeat loop
+        while not future.done():
+            yield " "  # Keep-alive space
+            time.sleep(1)
+            
+        # Retrieve result
+        try:
+            # result is typically (Response, status_code) or just Response
+            result = future.result()
+            
+            response_obj = None
+            status_code = 200
+            
+            if isinstance(result, tuple):
+                response_obj = result[0]
+                status_code = result[1]
+            else:
+                response_obj = result
+                
+            # If it's a Flask Response, get the JSON data
+            if hasattr(response_obj, 'get_json'):
+                data = response_obj.get_json()
+                if not data and hasattr(response_obj, 'data'):
+                     # Fallback if get_json returns None (e.g. if simple string)
+                     try:
+                         data = json.loads(response_obj.data)
+                     except:
+                         data = {'error': 'Could not parse response data'}
+                
+                # If error status, ensure data reflects it
+                if status_code >= 400 and isinstance(data, dict) and 'error' not in data:
+                    data['error'] = 'Request failed'
+                    
+                yield json.dumps(data)
+            else:
+                # Should not happen given get_app_stats_logic returns jsonify
+                yield json.dumps({'error': 'Internal Error: Invalid response format'})
+
+        except Exception as e:
+            logger.error(f"Error in stats stream: {e}")
+            yield json.dumps({'error': str(e)})
+
+    return Response(stream_with_context(generate()), mimetype='application/json', headers={'X-Accel-Buffering': 'no'})
 
 
 def get_app_stats_logic(app_key, date_str):
@@ -471,131 +553,153 @@ def send_error_email_endpoint():
 def scan_adhoc():
     """
     Realiza un escaneo bajo demanda para una aplicación no registrada.
+    Uses Streaming Response to avoid 504 Gateway Timeout.
     """
-    logger.info("⚡ RECEIVED SCAN-ADHOC REQUEST")
+    from flask import Response, stream_with_context
+    import json
+    import time
+    from concurrent.futures import ThreadPoolExecutor
     
-    # Log JWT claims for debugging
-    try:
-        from flask_jwt_extended import get_jwt
-        claims = get_jwt()
-        logger.info(f"  User role: {claims.get('role', 'unknown')}")
-        logger.info(f"  User id: {claims.get('sub', 'unknown')}")
-    except Exception as e:
-        logger.warning(f"  Could not extract JWT claims: {e}")
+    logger.info("⚡ RECEIVED SCAN-ADHOC REQUEST (STREAMING)")
     
+    # Capture request data eagerly before streaming
     try:
         data = request.get_json()
-        logger.info(f"  Request data keys: {list(data.keys()) if data else 'None'}")
-        
-        # Validate required fields
-        required_fields = ['base_url', 'username', 'password']
-        for field in required_fields:
-            if not data.get(field):
-                return jsonify({'error': f'Missing required field: {field}'}), 400
-        
-        base_url = data['base_url']
-        login_path = data.get('login_path', '/login')
-        logs_path = data.get('logs_path', '/logs')
-        username = data['username']
-        password = data['password']
-        date_str = data.get('date', datetime.now().strftime('%Y-%m-%d'))
-        
-        logger.info(f"Ad-hoc scan requested for {base_url} on {date_str}")
-        
-        # Import scraping function
-        logger.info("  Importing dependencies...")
-        from app.scrapper import procesar_aplicacion
-        from app.config import APPS_CONFIG
-        from datetime import date
-        
-        # Parse date
-        try:
-            dia = date.fromisoformat(date_str)
-            logger.info(f"  Parsed date: {dia}")
-        except ValueError as e:
-            logger.error(f"  Date parse error: {e}")
-            return jsonify({'error': f'Invalid date format: {date_str}. Use YYYY-MM-DD'}), 400
-        
-        # Create temporary app key
-        temp_app_key = f"adhoc_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        logger.info(f"  Created temp app key: {temp_app_key}")
-        
-        # Auto-detect authentication type based on base_url
-        auth_type = None
-        detected_login_path = login_path
-        normalized_base_url = base_url
-        detected_logs_path = logs_path
-        
-        # Check if this is a T4App domain (requires JWT API authentication)
-        if 't4app.com' in base_url.lower() and '/admin' in base_url.lower():
-            auth_type = 'jwt_api'
-            detected_login_path = '/api/login'  # Override to use API endpoint
-            detected_logs_path = '/admin/logs'  # Override to use correct logs endpoint
-            
-            # Normalize base_url: remove /admin and anything after it
-            # e.g., "https://t4app.com/admin" -> "https://t4app.com"
-            # This ensures login URL becomes "https://t4app.com/api/login" not "https://t4app.com/admin/api/login"
-            if '/admin' in normalized_base_url:
-                normalized_base_url = normalized_base_url.split('/admin')[0]
-            
-            logger.info(f"  ✓ Detected T4App domain - using JWT API authentication")
-            logger.info(f"  ✓ Normalized base_url from {base_url} to {normalized_base_url}")
-            logger.info(f"  ✓ Auto-adjusted login_path from {login_path} to {detected_login_path}")
-            logger.info(f"  ✓ Auto-adjusted logs_path from {logs_path} to {detected_logs_path}")
-        
-        # Temporarily inject into APPS_CONFIG
-        temp_config = {
-            "name": f"Ad-Hoc Scan: {base_url}",
-            "base_url": normalized_base_url,
-            "login_path": detected_login_path,
-            "logs_path": detected_logs_path,
-            "username": username,
-            "password": password,
-        }
-        
-        # Add auth_type if detected
-        if auth_type:
-            temp_config["auth_type"] = auth_type
-        
-        APPS_CONFIG[temp_app_key] = temp_config
-        logger.info(f"  Injected temp config into APPS_CONFIG")
-        logger.info(f"  Config: auth_type={auth_type}, base_url={normalized_base_url}, login_path={detected_login_path}")
-        
-        try:
-            # Execute scraping
-            logger.info(f"  Calling procesar_aplicacion for {temp_app_key}...")
-            resultado = procesar_aplicacion(temp_app_key, date_str, dia)
-            logger.info(f"  procesar_aplicacion completed successfully")
-            
-            # Format response (same as /view endpoint)
-            uncontrolled_errors = resultado.get('no_controlados_nuevos', []) + resultado.get('no_controlados_avisados', [])
-            controlled_errors = resultado.get('controlados_nuevos', []) + resultado.get('controlados_avisados', [])
-            
-            response = {
-                'logs': uncontrolled_errors,
-                'controlled': controlled_errors,
-                'app_key': temp_app_key,
-                'date': date_str
-            }
-            
-            logger.info(f"Ad-hoc scan completed for {base_url}: {len(uncontrolled_errors)} uncontrolled, {len(controlled_errors)} controlled")
-            return jsonify(response), 200
-            
-        except Exception as scraper_error:
-            logger.error(f"  ERROR in procesar_aplicacion: {scraper_error}")
-            logger.error(f"  Error type: {type(scraper_error).__name__}")
-            import traceback
-            traceback.print_exc()
-            raise  # Re-raise to be caught by outer except
-            
-        finally:
-            # Clean up temporary config
-            APPS_CONFIG.pop(temp_app_key, None)
-            logger.info(f"  Cleaned up temp app key: {temp_app_key}")
-    
     except Exception as e:
-        logger.error(f"❌ Error in ad-hoc scan: {e}")
-        logger.error(f"  Error type: {type(e).__name__}")
-        import traceback
-        logger.error(f"  Full traceback:\n{traceback.format_exc()}")
-        return jsonify({'error': str(e), 'type': type(e).__name__}), 500
+        return jsonify({'error': 'Invalid JSON'}), 400
+
+    # Validate required fields
+    required_fields = ['base_url', 'username', 'password']
+    for field in required_fields:
+        if not data.get(field):
+            return jsonify({'error': f'Missing required field: {field}'}), 400
+
+    def generate():
+        # Flush buffer immediately with 2KB of spaces (commented out in JSON)
+        # We can't really comment in JSON stream easily BEFORE the object.
+        # But we can yield spaces. Whitespace is ignored outside of JSON tokens.
+        yield " " * 2048 
+        
+        temp_app_key = None
+        try:
+            # Setup context and config (Same as before)
+            base_url = data['base_url']
+            login_path = data.get('login_path', '/login')
+            logs_path = data.get('logs_path', '/logs')
+            username = data['username']
+            password = data['password']
+            date_str = data.get('date', datetime.now().strftime('%Y-%m-%d'))
+            
+            logger.info(f"Ad-hoc scan requested for {base_url} on {date_str}")
+            
+            # Imports
+            from app.scrapper import procesar_aplicacion
+            from app.config import APPS_CONFIG
+            from datetime import date
+            
+            try:
+                dia = date.fromisoformat(date_str)
+            except ValueError:
+                yield json.dumps({'error': f'Invalid date format: {date_str}'})
+                return
+
+            # Temporary Config Setup
+            temp_app_key = f"adhoc_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            auth_type = None
+            detected_login_path = login_path
+            normalized_base_url = base_url
+            detected_logs_path = logs_path
+            
+            if 't4app.com' in base_url.lower() and '/admin' in base_url.lower():
+                auth_type = 'jwt_api'
+                detected_login_path = '/api/login'
+                detected_logs_path = '/admin/logs'
+                if '/admin' in normalized_base_url:
+                    normalized_base_url = normalized_base_url.split('/admin')[0]
+            
+            # Inject Config
+            temp_config = {
+                "name": f"Ad-Hoc Scan: {base_url}",
+                "base_url": normalized_base_url,
+                "login_path": detected_login_path,
+                "logs_path": detected_logs_path,
+                "username": username,
+                "password": password,
+            }
+            if auth_type:
+                temp_config["auth_type"] = auth_type
+            
+            APPS_CONFIG[temp_app_key] = temp_config
+            
+            # --- SCRAPING EXECUTION IN THREAD ---
+            # We run the blocking task in a thread and yield spaces to keep connection alive
+            result_container = {}
+            
+            # Capture real app object to pass context to thread
+            app = current_app._get_current_object()
+            
+            def run_scraping():
+                try:
+                    # Match main.py robustness: max_retries=3, timeout=60 (default)
+                    # This allows it to handle slow apps just like main.py
+                    with app.app_context():
+                        return procesar_aplicacion(temp_app_key, date_str, dia, max_retries=3, timeout=60)
+                except Exception as exc:
+                    raise exc
+
+            executor = ThreadPoolExecutor(max_workers=1)
+            future = executor.submit(run_scraping)
+            
+            # Heartbeat loop
+            while not future.done():
+                yield " "  # Send whitespace to keep connection alive
+                time.sleep(1) # Wait 1s
+            
+            # Retrieve result
+            try:
+                resultado = future.result()
+                
+                # Format Response
+                uncontrolled_errors = resultado.get('no_controlados_nuevos', []) + resultado.get('no_controlados_avisados', [])
+                controlled_errors = resultado.get('controlados_nuevos', []) + resultado.get('controlados_avisados', [])
+                
+                response_payload = {
+                    'logs': uncontrolled_errors,
+                    'controlled': controlled_errors,
+                    'app_key': temp_app_key,
+                    'date': date_str
+                }
+                
+                yield json.dumps(response_payload)
+                
+            except Exception as e:
+                # Handle Scraping Errors (Auth, Connection, etc.)
+                error_msg = str(e)
+                error_response = {'error': str(e), 'type': type(e).__name__}
+                
+                if "Autenticación falló" in error_msg or "credenciales inválidas" in error_msg:
+                    error_response = {
+                        'error': 'Authentication Failed', 
+                        'detail': 'Invalid username or password.',
+                        'original_error': error_msg
+                    }
+                    # We can't change status code in streaming, so we send error object.
+                    # Frontend usually checks for 'error' field if status is 200.
+                
+                elif "ConnectionError" in type(e).__name__ or "Timeout" in type(e).__name__:
+                     error_response = {
+                         'error': 'Connection Failed',
+                         'detail': f'Could not connect to app. The server may be unreachable.',
+                         'original_error': error_msg
+                     }
+
+                yield json.dumps(error_response)
+                
+        except Exception as e:
+             logger.error(f"Error in adhoc stream: {e}")
+             yield json.dumps({'error': str(e)})
+        finally:
+            if temp_app_key:
+                APPS_CONFIG.pop(temp_app_key, None)
+
+    return Response(stream_with_context(generate()), mimetype='application/json', headers={'X-Accel-Buffering': 'no'})
