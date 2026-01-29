@@ -1,0 +1,76 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: scrapping_pg_local
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: logs_password
+      POSTGRES_DB: postgres
+    ports:
+      - "5435:5432" # Puerto para que tú entres a ver los datos
+    volumes:
+      - postgres_data_local:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - t4net
+
+  backend:
+    build:
+      context: .
+      dockerfile: t4alerts_backend/Dockerfile
+    container_name: t4alerts_backend
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://postgres:logs_password@postgres:5432/postgres
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    volumes:
+      - ./salida_logs:/app/salida_logs
+    depends_on:
+      - postgres
+    networks:
+      - t4net
+
+  frontend:
+    build:
+      context: ./t4alerts_frontend
+      dockerfile: Dockerfile
+    container_name: t4alerts_frontend
+    restart: always
+    ports:
+      - "8080:80" # Cambié a 8080 por si tienes algo en el puerto 80 de tu Mac
+    depends_on:
+      - backend
+    networks:
+      - t4net
+
+  # 🚀 AQUÍ ESTÁ EL NUEVO SERVICIO (EL "BACKDOOR")
+  scheduler:
+    build:
+      context: .
+      dockerfile: t4alerts_backend/Dockerfile
+    container_name: t4alerts_scheduler
+    restart: always # Si falla o el Mac se reinicia, Docker lo levanta
+    environment:
+      - DATABASE_URL=postgresql://postgres:logs_password@postgres:5432/postgres
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    volumes:
+      - .:/app # Mapea tu código para que el scheduler encuentre main.py
+      - ./salida_logs:/app/salida_logs
+    # Este comando mantiene vivo el proceso y ejecuta tu lógica de APScheduler
+    command: python scheduler/scheduler_main.py 
+    depends_on:
+      - postgres
+    networks:
+      - t4net
+
+volumes:
+  postgres_data_local:
+
+networks:
+  t4net:
+    driver: bridge

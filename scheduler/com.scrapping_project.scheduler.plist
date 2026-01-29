@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Nombre único del servicio -->
+    <key>Label</key>
+    <string>com.scrapping_project.scheduler</string>
+
+    <!-- Comando a ejecutar -->
+    <key>ProgramArguments</key>
+    <array>
+        <!-- IMPORTANTE: Verifica la ruta de tu python con 'which python' en terminal -->
+        <!-- Si usas un entorno virtual, pon la ruta completa al python del entorno -->
+        <string>/Users/administrator/Desktop/scrapping_project/venv/bin/python</string>
+        <string>/Users/administrator/Desktop/scrapping_project/scheduler/scheduler_main.py</string>
+    </array>
+
+    <!-- Directorio de trabajo -->
+    <key>WorkingDirectory</key>
+    <string>/Users/administrator/Desktop/scrapping_project</string>
+
+    <!-- Reiniciar automáticamente si falla (KeepAlive) -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Iniciar al cargar (al iniciar sesión) -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Logs de salida y error -->
+    <key>StandardOutPath</key>
+    <string>/Users/administrator/Desktop/scrapping_project/scheduler/scheduler.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/administrator/Desktop/scrapping_project/scheduler/scheduler.err</string>
+
+    <!-- Variables de entorno (Opcional, si tu script las necesita) -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+</dict>
+</plist>

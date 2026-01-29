@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Nombre único del servicio -->
+    <key>Label</key>
+    <string>com.scrapping_project.scheduler</string>
+
+    <!-- Comando a ejecutar -->
+    <key>ProgramArguments</key>
+    <array>
+        <!-- Reemplaza con la ruta absoluta a tu ejecutable de Python -->
+        <!-- Ejemplo: /Users/tu_usuario/proyecto/venv/bin/python -->
+        <string>/PATH/TO/YOUR/PROJECT/venv/bin/python</string>
+        
+        <!-- Reemplaza con la ruta absoluta al script scheduler_main.py -->
+        <string>/PATH/TO/YOUR/PROJECT/scheduler/scheduler_main.py</string>
+    </array>
+
+    <!-- Directorio de trabajo: Ruta absoluta a la raíz del proyecto -->
+    <key>WorkingDirectory</key>
+    <string>/PATH/TO/YOUR/PROJECT</string>
+
+    <!-- Reiniciar automáticamente si falla (KeepAlive) -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Iniciar al cargar (al iniciar sesión) -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Logs de salida y error -->
+    <key>StandardOutPath</key>
+    <string>/PATH/TO/YOUR/PROJECT/scheduler/scheduler.log</string>
+    <key>StandardErrorPath</key>
+    <string>/PATH/TO/YOUR/PROJECT/scheduler/scheduler.err</string>
+
+    <!-- Variables de entorno (Opcional) -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+</dict>
+</plist>
