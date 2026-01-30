@@ -357,7 +357,7 @@ class SSLChecker:
             if days_left < 8:
                 severity = "CRITICAL"
                 color = "red"
-            elif 8 <= days_left <= 30:
+            elif 8 <= days_left <= 3:  # Enviar alerta si <= 3 días
                 severity = "WARNING"
                 color = "#FFBF00" # Mustard/Amber
             else:
@@ -396,21 +396,16 @@ class SSLChecker:
         if result["status"] == "ERROR" and result["expires"] == "Unknown":
             return
 
-        # Check conditions for alerting
-        # process_domain logic was: send alert if days_left < umbral? 
-        # Actually in original code it sent alert ALWAYS (see send_alert call in original code line 106)
-        # Wait, line 106 sent alert regardless of days_left.
-        # But let's check if the user wanted alerts only on threshold.
-        # The original code sent it always. I will accept that behavior.
-        
-        self.send_alert(
-            hostname, 
-            result["days_left"], 
-            result["expires"], 
-            result["issuer"], 
-            result["status"], 
-            result["color"]
-        )
+        # Solo enviar alerta si quedan <= 3 días
+        if result["days_left"] <= 3:
+            self.send_alert(
+                hostname, 
+                result["days_left"], 
+                result["expires"], 
+                result["issuer"], 
+                result["status"], 
+                result["color"]
+            )
 
     def send_alert(self, hostname, days_left, expiration_str, issuer, severity, color):
         try:

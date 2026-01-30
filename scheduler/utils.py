@@ -1,19 +1,16 @@
 # scheduler/utils.py
 import logging
-from logging.handlers import RotatingFileHandler
-from datetime import datetime
 import subprocess
 import sys
+import os
 
 from config import (
-    SCHEDULER_LOG_FILE,
-    HEALTH_FILE,
     MAIN_PATH,
     BASE_DIR,
 )
 
 def get_logger() -> logging.Logger:
-    """Configura y devuelve un logger con rotación de archivo."""
+    """Configura y devuelve un logger solo para consola."""
     logger = logging.getLogger("scheduler")
 
     # Evita añadir handlers duplicados si se llama varias veces
@@ -22,33 +19,50 @@ def get_logger() -> logging.Logger:
 
     logger.setLevel(logging.INFO)
 
-    handler = RotatingFileHandler(
-        SCHEDULER_LOG_FILE,
-        maxBytes=1_000_000,  # 1 MB
-        backupCount=5,       # guarda hasta 5 versiones antiguas
-    )
+    # Solo handler para consola (stdout)
+    console_handler = logging.StreamHandler(sys.stdout)
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
 
-    logger.addHandler(handler)
     return logger
 
 
 def run_main_script(logger: logging.Logger) -> None:
     """Ejecuta main.py como si hicieras 'python main.py' en la raíz del proyecto."""
     logger.info("Lanzando main.py desde scheduler")
-
-    subprocess.run(
-        [sys.executable, str(MAIN_PATH)],
-        check=True,
-        cwd=str(BASE_DIR),  # para que main.py se ejecute en scrapping_project
-    )
-
-    logger.info("main.py terminó correctamente")
-
-
-def mark_success() -> None:
-    """Guarda la fecha/hora de la última ejecución correcta."""
-    ahora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with HEALTH_FILE.open("w", encoding="utf-8") as f:
-        f.write(f"Última ejecución correcta: {ahora}\n")
+    
+    try:
+        # Usar Popen para streaming en tiempo real
+        process = subprocess.Popen(
+            [sys.executable, "-u", str(MAIN_PATH)],  # -u para unbuffered output
+            cwd=str(BASE_DIR),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # Combinar stderr con stdout
+            text=True,
+            bufsize=1,  # Line buffered
+            env={**os.environ, "PYTHONUNBUFFERED": "1"}  # Forzar unbuffered
+        )
+        
+        # Leer y mostrar output en tiempo real línea por línea
+        for line in process.stdout:
+            line = line.rstrip()
+            if line:  # Solo mostrar líneas no vacías
+                logger.info(f"[main.py] {line}")
+        
+        # Esperar a que termine y verificar código de salida
+        returncode = process.wait(timeout=3600)
+        
+        if returncode != 0:
+            logger.error(f"main.py terminó con código de error: {returncode}")
+            raise subprocess.CalledProcessError(returncode, [sys.executable, str(MAIN_PATH)])
+        
+        logger.info("main.py terminó correctamente")
+        
+    except subprocess.TimeoutExpired:
+        process.kill()
+        logger.error("main.py excedió el tiempo máximo de ejecución (1 hora)")
+        raise
+    except Exception as e:
+        logger.exception(f"Error ejecutando main.py: {e}")
+        raise

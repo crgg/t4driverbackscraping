@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Identificador único del servicio -->
+	<key>Label</key>
+	<string>com.user.logscraper</string>
+
+	<!-- Comando a ejecutar: Python + ruta absoluta al script -->
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/administrator/Desktop/scrapping_project/venv/bin/python3</string>
+		<string>/Users/administrator/Desktop/scrapping_project/scheduler/scheduler_main.py</string>
+	</array>
+
+	<!-- Directorio de trabajo (importante para rutas relativas) -->
+	<key>WorkingDirectory</key>
+	<string>/Users/administrator/Desktop/scrapping_project</string>
+
+	<!-- Variables de entorno necesarias -->
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+
+	<!-- Iniciar automáticamente al cargar el sistema -->
+	<key>RunAtLoad</key>
+	<true/>
+
+	<!-- Mantener el proceso siempre activo (reiniciar si falla) -->
+	<key>KeepAlive</key>
+	<true/>
+
+	<!-- Logging: Salida estándar -->
+	<key>StandardOutPath</key>
+	<string>/Users/administrator/Desktop/scrapping_project/launchd_execution/logs/stdout.log</string>
+
+	<!-- Logging: Errores -->
+	<key>StandardErrorPath</key>
+	<string>/Users/administrator/Desktop/scrapping_project/launchd_execution/logs/stderr.log</string>
+
+	<!-- Tiempo de espera antes de reiniciar tras un fallo (segundos) -->
+	<key>ThrottleInterval</key>
+	<integer>30</integer>
+</dict>
+</plist>

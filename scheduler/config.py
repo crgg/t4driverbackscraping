@@ -9,11 +9,11 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 MAIN_PATH = BASE_DIR / "main.py"
 
 # Carpeta y archivos de logs
-LOG_DIR = Path(__file__).resolve().parent / "logs"
-LOG_DIR.mkdir(exist_ok=True)
+# Carpeta donde esta este archivo (scheduler)
+SCHEDULER_DIR = Path(__file__).resolve().parent
 
-SCHEDULER_LOG_FILE = LOG_DIR / "scheduler.log"
-HEALTH_FILE = LOG_DIR / "last_success.txt"
+SCHEDULER_LOG_FILE = SCHEDULER_DIR / "scheduler.log"
+HEALTH_FILE = SCHEDULER_DIR / "last_success.txt"
 
 # === Entorno: test o prod ===
 # Por defecto: "test". Para producción, exporta SCHED_ENV=prod

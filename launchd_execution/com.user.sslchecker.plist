@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Identificador único del servicio -->
+	<key>Label</key>
+	<string>com.user.sslchecker</string>
+
+	<!-- Comando a ejecutar: Python del venv + script SSL checker -->
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/administrator/Desktop/scrapping_project/venv/bin/python3</string>
+		<string>/Users/administrator/Desktop/scrapping_project/check_ssl_certificates.py</string>
+	</array>
+
+	<!-- Directorio de trabajo -->
+	<key>WorkingDirectory</key>
+	<string>/Users/administrator/Desktop/scrapping_project</string>
+
+	<!-- Variables de entorno necesarias -->
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+
+	<!-- Ejecutar diariamente a las 9:00 AM -->
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Hour</key>
+		<integer>9</integer>
+		<key>Minute</key>
+		<integer>0</integer>
+	</dict>
+
+	<!-- NO iniciar al cargar el sistema (solo según calendario) -->
+	<key>RunAtLoad</key>
+	<false/>
+
+	<!-- NO mantener corriendo (solo ejecutar una vez al día) -->
+	<key>KeepAlive</key>
+	<false/>
+
+	<!-- Logging: Salida estándar -->
+	<key>StandardOutPath</key>
+	<string>/Users/administrator/Desktop/scrapping_project/launchd_execution/logs/ssl_checker_stdout.log</string>
+
+	<!-- Logging: Errores -->
+	<key>StandardErrorPath</key>
+	<string>/Users/administrator/Desktop/scrapping_project/launchd_execution/logs/ssl_checker_stderr.log</string>
+</dict>
+</plist>
