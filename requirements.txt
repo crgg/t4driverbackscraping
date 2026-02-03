@@ -14,3 +14,9 @@ Flask-SQLAlchemy
 bcrypt
 flask-cors
 pytz
+
+# Google Chat API dependencies
+google-apps-chat>=0.1.9
+google-auth>=2.28.0
+google-auth-oauthlib>=1.2.0
+google-auth-httplib2>=0.2.0

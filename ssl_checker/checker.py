@@ -357,7 +357,7 @@ class SSLChecker:
             if days_left < 8:
                 severity = "CRITICAL"
                 color = "red"
-            elif 8 <= days_left <= 3:  # Enviar alerta si <= 3 días
+            elif 8 <= days_left <= 60:  # Enviar alerta si <= 60 días
                 severity = "WARNING"
                 color = "#FFBF00" # Mustard/Amber
             else:
@@ -396,8 +396,8 @@ class SSLChecker:
         if result["status"] == "ERROR" and result["expires"] == "Unknown":
             return
 
-        # Solo enviar alerta si quedan <= 3 días
-        if result["days_left"] <= 3:
+        # Solo enviar alerta si quedan <= 60 días
+        if result["days_left"] <= 60:
             self.send_alert(
                 hostname, 
                 result["days_left"], 

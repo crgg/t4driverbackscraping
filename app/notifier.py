@@ -4,12 +4,13 @@ from typing import Dict, Any
 from app.email_notifier import enviar_resumen_por_correo
 from sms import enviar_sms_errores_no_controlados
 from slack_comunication import enviar_slack_errores_no_controlados
+from google_chat import enviar_gchat_errores_no_controlados, enviar_aviso_gchat
 
 
 def notificar_app(resultado: Dict[str, Any]) -> None:
     """
     Recibe el dict devuelto por procesar_aplicacion()
-    y envía notificaciones (correo, SMS y Slack).
+    y envía notificaciones (correo, Google Chat, SMS y Slack).
     """
     dia = resultado["dia"]
     app_name = resultado["app_name"]
@@ -18,6 +19,11 @@ def notificar_app(resultado: Dict[str, Any]) -> None:
     # Enviar correo electrónico
     enviar_resumen_por_correo(dia, app_name, app_key)
     print(f"✓ Correo enviado para {app_name}")
+    
+    # Enviar Google Chat (solo si hay errores NO controlados SQL)
+    gchat_enviado = enviar_gchat_errores_no_controlados(resultado)
+    if gchat_enviado:
+        print(f"✓ Google Chat enviado para {app_name}")
     
     # Enviar SMS (solo si hay errores NO controlados)
     sms_enviado = enviar_sms_errores_no_controlados(resultado)
@@ -30,6 +36,7 @@ def notificar_app(resultado: Dict[str, Any]) -> None:
         print(f"✓ Notificación de Slack enviada para {app_name}")
 
 
+
 def notificar_fecha_futura(app_key: str, app_name: str, fecha_str: str) -> None:
     """
     Envía notificaciones indicando que se intentó consultar una fecha futura.
@@ -37,6 +44,7 @@ def notificar_fecha_futura(app_key: str, app_name: str, fecha_str: str) -> None:
     from app.alerts import send_email, default_recipients
     from sms import enviar_aviso_sms
     from slack_comunication import enviar_aviso_slack
+    from google_chat import enviar_aviso_gchat
     
     mensaje_texto = (
         f"The content for date {fecha_str} has not been created yet, "
@@ -78,7 +86,14 @@ def notificar_fecha_futura(app_key: str, app_name: str, fecha_str: str) -> None:
     )
     enviar_aviso_sms(sms_msg)
     
-    # 3. Slack
+    # 3. Google Chat
+    gchat_msg = (
+        f"⚠️ **{app_name}** - Future date query `{fecha_str}`\n"
+        f"ℹ️ {mensaje_texto}"
+    )
+    enviar_aviso_gchat(gchat_msg)
+    
+    # 4. Slack
     slack_msg = (
         f"⚠️ *{app_name}* - Future date query `{fecha_str}`\n"
         f"ℹ️ {mensaje_texto}"
@@ -100,6 +115,7 @@ def notificar_logs_desactualizados(app_key: str, app_name: str, fecha_str: str, 
     from app.alerts import send_email, default_recipients
     from sms import enviar_aviso_sms
     from slack_comunication import enviar_aviso_slack
+    from google_chat import enviar_aviso_gchat
     
     # Mensaje principal en inglés según requerimiento
     mensaje_texto = (
@@ -153,7 +169,21 @@ def notificar_logs_desactualizados(app_key: str, app_name: str, fecha_str: str, 
     except Exception as e:
         print(f"⚠️ Error enviando SMS de logs desactualizados: {e}")
     
-    # 3. Slack - Formato con emojis y markdown
+    # 3. Google Chat - Formato con emojis y markdown
+    gchat_msg = (
+        f"🚨 **DANGER: Stale Log Files**\n"
+        f"**Application:** {app_name}\n"
+        f"**Requested:** `{fecha_str}`\n"
+        f"**Most Recent Log:** `{most_recent_date}` (*{days_old} days old*)\n"
+        f"⚠️ _{mensaje_texto}_"
+    )
+    try:
+        enviar_aviso_gchat(gchat_msg)
+        print(f"✓ Google Chat de alerta de logs desactualizados enviado para {app_name}")
+    except Exception as e:
+        print(f"⚠️ Error enviando Google Chat de logs desactualizados: {e}")
+    
+    # 4. Slack - Formato con emojis y markdown
     slack_msg = (
         f"🚨 *DANGER: Stale Log Files*\n"
         f"*Application:* {app_name}\n"
