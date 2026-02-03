@@ -1,0 +1,8 @@
+Flask
+google-apps-chat
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+SQLAlchemy
+psycopg2-binary
+python-dotenv

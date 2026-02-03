@@ -1,0 +1,61 @@
+# --- Sistema (macOS)
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# --- Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Builds/artefactos
+build/
+dist/
+*.log
+
+# --- Bases de datos y datos locales
+*.db
+*.sqlite
+*.sqlite3
+chat.db
+
+# --- Entornos virtuales
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# --- Editores/IDE
+.vscode/
+.idea/
+
+# --- Credenciales y secretos (Google / OAuth / ngrok / claves)
+# Google OAuth / Service Accounts / tokens
+credentials.json
+token.json
+client_secret*.json
+service_account*.json
+*gcloud*credentials*.json
+*google*credentials*.json
+
+# Archivos con nombres típicos de secretos
+*.pem
+*.key
+*.p12
+*.crt
+secrets.*.json
+secret.*.json
+*.enc
+
+# Config locales de herramientas
+ngrok.yml
+.ngrok2/

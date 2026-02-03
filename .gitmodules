@@ -1,0 +1,3 @@
+[submodule "googleChatTesting"]
+	path = googleChatTesting
+	url = https://github.com/crgg/googleChatTesting.git

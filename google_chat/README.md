@@ -1,150 +1,205 @@
 # google_chat/README.md
-# 💬 Google Chat Notification Module
+# Google Chat Integration Module
 
-## Overview
+Este módulo permite enviar notificaciones de errores a Google Chat Spaces con soporte para hilos (threads).
 
-Scalable notification system using Google Chat API to replace Twilio SMS for T4Alerts error notifications. Supports Direct Messages (DM), Group Chats, and Spaces with thread organization.
+## Características
 
-## Architecture
+- ✅ Envío de notificaciones de errores SQL y generales
+- ✅ Organización por hilos para facilitar seguimiento
+- ✅ Soporte para OAuth user mode y Service Account
+- ✅ Manejo robusto de errores
+- ✅ Integración transparente con el sistema existente (email, SMS, Slack)
 
-- **Strategy Pattern**: Different notification targets (DM, Group, Space)
-- **Singleton Pattern**: Client instance management
-- **Factory Pattern**: Strategy creation based on configuration
-- **Template Method**: Common message formatting
-- **Error Boundary Decorator**: Graceful error handling
+## Configuración
 
-## Directory Structure
+### Variables de Entorno
+
+Agregar al archivo `.env`:
+
+```bash
+# Habilitar/deshabilitar Google Chat
+GCHAT_ENABLED=1
+
+# Modo de autenticación: 'user' (OAuth) o 'app' (Service Account)
+GCHAT_MODE=user
+
+# Space ID donde se envían las alertas (obtener de chat.google.com)
+GCHAT_SPACE_NAME=spaces/AAAAxxxxxxx
+
+# Estrategia de organización por threads
+# Opciones: per_app, per_error_type, per_date, none
+GCHAT_THREAD_STRATEGY=per_app
+```
+
+### Autenticación - User Mode (Recomendado)
+
+1. **Credenciales OAuth**: Asegurar que existe `credentials.json` en el directorio raíz
+   - Descargado de Google Cloud Console
+   - Proyecto: `woven-edge-477319-f6`
+   - Cliente OAuth configurado para Desktop App
+
+2. **Primera Ejecución**: Al ejecutar por primera vez:
+   ```bash
+   python test/test_gchat_integration.py
+   ```
+   - Se abrirá el navegador para autorizar con la cuenta de Google
+   - Autorizar con **matias@t4app.com**
+   - Se creará automáticamente `token.json` con las credenciales
+
+3. **Ejecuciones Posteriores**: El módulo usa `token.json` y refresca automáticamente
+
+### Crear un Space de Google Chat
+
+1. Ir a [chat.google.com](https://chat.google.com/)
+2. Click en ➕ junto a "Spaces"
+3. **Create space**
+4. **Space name**: `T4 Alerts` (o nombre deseado)
+5. Agregar miembros:
+   - `matias@t4app.com`
+   - `ramon@t4app.com`
+   - `geremy@t4app.com`
+   - Otros miembros del equipo
+
+6. **Obtener Space ID**:
+   - Abrir el Space creado
+   - Click en el nombre del Space (arriba)
+   - Click en "⚙️ Settings"
+   - Copiar el **Space ID** (formato: `spaces/AAAAxxxxxxx`)
+   - Pegar en `.env` como `GCHAT_SPACE_NAME`
+
+## Uso
+
+### Desde app/notifier.py
+
+El módulo se integra automáticamente. No requiere cambios en el código existente:
+
+```python
+from google_chat import enviar_gchat_errores_no_controlados, enviar_aviso_gchat
+
+# Enviar errores no controlados (automático)
+enviar_gchat_errores_no_controlados(resultado)
+
+# Enviar avisos generales
+enviar_aviso_gchat("⚠️ Mensaje de aviso")
+```
+
+### Estrategias de Threading
+
+#### `per_app` (Recomendado)
+- Un hilo por aplicación: `driverapp_goto`, `klc`, `broker_goto`, etc.
+- Facilita seguimiento de errores por sistema
+- Thread key: `app-{app_key}`
+
+#### `per_error_type`
+- Un hilo por tipo de error: SQL, timeout, 404, etc.
+- Útil para análisis de patrones
+
+#### `per_date`
+- Un hilo por fecha de ejecución
+- Histórico organizado cronológicamente
+
+#### `none`
+- Sin hilos, todos los mensajes en el Space principal
+- Más simple pero menos organizado
+
+## Estructura del Módulo
 
 ```
 google_chat/
-├── __init__.py                 # Public API
-├── core/
-│   ├── auth.py                # Service Account authentication
-│   ├── config.py              # Environment configuration
-│   └── logger.py              # Colored logging
-├── client/
-│   └── gchat_client.py        # Google Chat API wrapper
-├── strategies/
-│   ├── base_strategy.py       # Abstract strategy
-│   ├── dm_strategy.py         # Direct Message
-│   └── space_strategy.py      # Space with threads
-├── notifier/
-│   └── gchat_notifier.py      # Main orchestrator
-├── errors/
-│   └── exceptions.py          # Custom exceptions
-└── README.md                  # This file
+├── __init__.py           # Exporta funciones principales
+├── auth.py              # Autenticación OAuth y Service Account
+├── client.py            # Cliente de Google Chat API
+├── config.py            # Gestión de configuración
+├── errors.py            # Manejo de errores y excepciones
+├── notifier.py          # Funciones de notificación
+└── README.md            # Esta documentación
 ```
 
-## Configuration
+## Formato de Mensajes
 
-### Environment Variables
+### Errores No Controlados
 
-```bash
-# Enable/disable
-GCHAT_ENABLED=1                # 1=enabled, 0=disabled
+```
+🚨 **DriverApp GoTo** - Errores Detectados
+📅 Fecha: `2026-02-03`
+⚠️ Errores no controlados: **5**
 
-# Authentication
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
+**Errores SQL:**
+• `SQLSTATE[HY000]: General error` (3x)
+• `Duplicate entry for key 'PRIMARY'` (2x)
 
-# Notification mode
-GCHAT_MODE=dm                  # 'dm', 'group', or 'space'
-
-# For DM mode
-GCHAT_TARGET_EMAIL=devops@your-domain.com
-
-# For Space mode
-# GCHAT_SPACE_NAME=spaces/AAAAxxxxxxxx
-# GCHAT_THREAD_KEY=t4-alerts   # Optional
+**Errores Generales:**
+• `Timeout connecting to API` (1x)
 ```
 
-### Required Credentials
+### Avisos Generales
 
-1. **Service Account Key** (`service-account-key.json`)
-   - Download from Google Cloud Console
-   - Never commit to git (add to `.gitignore`)
-   - Set path in `GOOGLE_APPLICATION_CREDENTIALS`
-
-2. **Target Email or Space ID**
-   - For DM: User's email address
-   - For Space: Space ID from Google Chat
-
-## Usage
-
-### Basic Usage
-
-```python
-from google_chat import enviar_gchat_errores_no_controlados
-
-resultado = {
-    'app_name': 'DriveApp',
-    'app_key': 'driverapp_goto',
-    'fecha_str': '2026-02-02',
-    'no_controlados_nuevos': [
-        'SQLSTATE error...',
-        'Database timeout...'
-    ]
-}
-
-success = enviar_gchat_errores_no_controlados(resultado)
+```
+⚠️ **DriverApp GoTo** - Future date query `2026-02-05`
+ℹ️ The content for date 2026-02-05 has not been created yet, please check back later.
 ```
 
-### Generic Messages
+## Troubleshooting
 
-```python
-from google_chat import enviar_aviso_gchat
+### Error: "Missing credentials.json"
+- Descargar `credentials.json` de Google Cloud Console
+- Colocar en el directorio raíz del proyecto
 
-success = enviar_aviso_gchat("🧪 Test message from T4Alerts")
+### Error: "PERMISSION_DENIED"
+- Verificar que la cuenta autorizada tiene acceso al Space
+- Agregar la cuenta como miembro del Space
+
+### Error: "Invalid GCHAT_SPACE_NAME"
+- Verificar formato: debe ser `spaces/AAAAxxxxxxx`
+- Obtener ID correcto desde configuración del Space
+
+### Mensajes no aparecen en threads
+- Verificar `GCHAT_THREAD_STRATEGY` en `.env`
+- Los threads se crean automáticamente al primer envío
+
+## API Reference
+
+### `enviar_gchat_errores_no_controlados(resultado: Dict) -> bool`
+
+Envía notificación de errores no controlados al Space.
+
+**Args:**
+- `resultado`: Dict del resultado de `procesar_aplicacion()` con:
+  - `app_name`: Nombre de la aplicación
+  - `app_key`: Clave de la aplicación
+  - `dia`: Fecha del reporte
+  - `errores_sql`: Lista de errores SQL
+  - `errores_generales`: Lista de errores generales
+
+**Returns:**
+- `True` si se envió la notificación
+- `False` si no había errores o si Google Chat está deshabilitado
+
+### `enviar_aviso_gchat(mensaje: str) -> bool`
+
+Envía un mensaje de aviso general al Space.
+
+**Args:**
+- `mensaje`: Texto del mensaje (soporta markdown)
+
+**Returns:**
+- `True` si se envió el mensaje
+- `False` si Google Chat está deshabilitado o hubo error
+
+## Dependencias
+
+Las siguientes dependencias ya están en `requirements.txt`:
+
+```
+google-apps-chat>=0.1.9
+google-auth>=2.28.0
+google-auth-oauthlib>=1.2.0
+google-auth-httplib2>=0.2.0
 ```
 
-## Integration with main.py
+## Seguridad
 
-Already integrated in `app/notifier.py`:
-
-```python
-from google_chat import enviar_gchat_errores_no_controlados
-
-def notificar_app(resultado):
-    # Email
-    enviar_resumen_por_correo(...)
-    
-    # Google Chat (NEW)
-    gchat_enviado = enviar_gchat_errores_no_controlados(resultado)
-    if gchat_enviado:
-        print(f"✓ Google Chat enviado para {app_name}")
-    
-    # SMS (legacy)
-    # Slack
-    ...
-```
-
-## Error Handling
-
-- **Graceful degradation**: Errors don't crash main app
-- **Detailed logging**: All errors logged with timestamps
-- **Auto-retry**: Exponential backoff for transient errors
-- **Rate limiting**: Respects Google Chat API limits (60 req/min)
-
-## Testing
-
-See `implementation_plan.md` for detailed testing procedures.
-
-Quick test:
-```bash
-python -c "from google_chat import enviar_aviso_gchat; enviar_aviso_gchat('Test')"
-```
-
-## Design Patterns Used
-
-1. **Strategy**: `DMStrategy`, `SpaceStrategy` implement `NotificationStrategy`
-2. **Singleton**: Single `GoogleChatNotifier` instance
-3. **Factory**: `_create_strategy()` creates appropriate strategy
-4. **Template Method**: `format_message()` in base strategy
-5. **Decorator**: `@gchat_error_boundary` for error handling
-
-## Future Enhancements
-
-- [ ] Group Chat support
-- [ ] Rich cards with buttons
-- [ ] File attachments
-- [ ] Two-way bot interactions
-- [ ] Metrics and analytics
+- ⚠️ **NO** commitear `token.json` - ya está en `.gitignore`
+- ⚠️ **NO** commitear `credentials.json` si contiene secretos
+- Para producción, considerar usar Service Account mode (`GCHAT_MODE=app`)

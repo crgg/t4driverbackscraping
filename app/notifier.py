@@ -2,7 +2,7 @@
 from typing import Dict, Any
 
 from app.email_notifier import enviar_resumen_por_correo
-from sms import enviar_sms_errores_no_controlados
+# from sms import enviar_sms_errores_no_controlados  # DESHABILITADO
 from slack_comunication import enviar_slack_errores_no_controlados
 from google_chat import enviar_gchat_errores_no_controlados, enviar_aviso_gchat
 
@@ -20,15 +20,18 @@ def notificar_app(resultado: Dict[str, Any]) -> None:
     enviar_resumen_por_correo(dia, app_name, app_key)
     print(f"✓ Correo enviado para {app_name}")
     
-    # Enviar Google Chat (solo si hay errores NO controlados SQL)
-    gchat_enviado = enviar_gchat_errores_no_controlados(resultado)
-    if gchat_enviado:
-        print(f"✓ Google Chat enviado para {app_name}")
+    # Enviar Google Chat (solo si hay errores NO controlados)
+    try:
+        gchat_enviado = enviar_gchat_errores_no_controlados(resultado)
+        if gchat_enviado:
+            print(f"✓ Google Chat enviado para {app_name}")
+    except Exception as e:
+        print(f"⚠️ Error enviando Google Chat para {app_name}: {e}")
     
-    # Enviar SMS (solo si hay errores NO controlados)
-    sms_enviado = enviar_sms_errores_no_controlados(resultado)
-    if sms_enviado:
-        print(f"✓ SMS enviado para {app_name}")
+    # Enviar SMS (solo si hay errores NO controlados) - DESHABILITADO
+    # sms_enviado = enviar_sms_errores_no_controlados(resultado)
+    # if sms_enviado:
+    #     print(f"✓ SMS enviado para {app_name}")
     
     # Enviar notificación a Slack (solo si hay errores NO controlados)
     slack_enviado = enviar_slack_errores_no_controlados(resultado)
@@ -42,7 +45,7 @@ def notificar_fecha_futura(app_key: str, app_name: str, fecha_str: str) -> None:
     Envía notificaciones indicando que se intentó consultar una fecha futura.
     """
     from app.alerts import send_email, default_recipients
-    from sms import enviar_aviso_sms
+    # from sms import enviar_aviso_sms  # DESHABILITADO
     from slack_comunication import enviar_aviso_slack
     from google_chat import enviar_aviso_gchat
     
@@ -80,11 +83,11 @@ def notificar_fecha_futura(app_key: str, app_name: str, fecha_str: str) -> None:
 
     # 2. SMS - Mensaje corto
     # "App: [Name] - Future date [Date]. Content being created, check later."
-    sms_msg = (
-        f"App: {app_name[:15]} - Future date {fecha_str}. "
-        "Content being created, check later."
-    )
-    enviar_aviso_sms(sms_msg)
+    # sms_msg = (
+    #     f"App: {app_name[:15]} - Future date {fecha_str}. "
+    #     "Content being created, check later."
+    # )
+    # enviar_aviso_sms(sms_msg)
     
     # 3. Google Chat
     gchat_msg = (
@@ -159,15 +162,15 @@ def notificar_logs_desactualizados(app_key: str, app_name: str, fecha_str: str, 
         print(f"⚠️ Error enviando correo de logs desactualizados: {e}")
     
     # 2. SMS - Mensaje corto y conciso
-    sms_msg = (
-        f"🚨 {app_name[:20]} - STALE LOGS! "
-        f"Last update: {most_recent_date} ({days_old}d ago). Check urgently!"
-    )
-    try:
-        enviar_aviso_sms(sms_msg)
-        print(f"✓ SMS de alerta de logs desactualizados enviado para {app_name}")
-    except Exception as e:
-        print(f"⚠️ Error enviando SMS de logs desactualizados: {e}")
+    # sms_msg = (
+    #     f"🚨 {app_name[:20]} - STALE LOGS! "
+    #     f"Last update: {most_recent_date} ({days_old}d ago). Check urgently!"
+    # )
+    # try:
+    #     enviar_aviso_sms(sms_msg)
+    #     print(f"✓ SMS de alerta de logs desactualizados enviado para {app_name}")
+    # except Exception as e:
+    #     print(f"⚠️ Error enviando SMS de logs desactualizados: {e}")
     
     # 3. Google Chat - Formato con emojis y markdown
     gchat_msg = (

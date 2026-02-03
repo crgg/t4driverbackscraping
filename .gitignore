@@ -235,3 +235,7 @@ dockerfile
 
 #nginx
 nginx.conf
+
+#google chat
+credentials.json
+token.json
