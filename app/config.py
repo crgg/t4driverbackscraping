@@ -35,7 +35,7 @@ APPS_CONFIG_LEGACY: Dict[str, Dict] = {
         "password_env": "GOEXPERIOR_PASS",
     },
     "klc": {
-        "name": "T4APP - KLC",
+        "name": "T4DRIVER API - KLC",
         "base_url": "https://klc.t4app.com",
         "login_path": "/login",
         "logs_path": "/logs",
@@ -83,6 +83,15 @@ APPS_CONFIG_LEGACY: Dict[str, Dict] = {
         "password_env": "T4APP_PASSWORD",
         "auth_type": "jwt_api",  # Special marker for JWT API auth
     },
+    "t4trans": {
+        "name": "T4TRANS - NOTIFICACIONES",
+        "base_url": "https://core.t4trans.com",
+        "login_path": "/t4notification/login",  # T4Notification has its own login
+        "logs_path": "/t4notification/logs",
+        "username_env": "T4TRANS_USER",
+        "password_env": "T4TRANS_PASSWORD",
+        "auth_type": "t4trans_custom",  # Custom parser for "local.debug:" pattern
+    },
 }
 
 # Specific mapping for SMS notifications (prevent NameError)
@@ -94,7 +103,8 @@ SMS_APP_NAMES = {
     "broker_goto": "BROKER GOTO",
     "klc_crossdock": "CROSSDOCK KLC",
     "t4tms_backend": "T4TMS BACKEND",
-    "t4app_admin": "T4APP ADMIN"
+    "t4app_admin": "T4APP ADMIN",
+    "t4trans": "T4TRANS"
 }
 
 

@@ -354,10 +354,10 @@ class SSLChecker:
 
             logger.info(f"{hostname} - Days Left: {days_left}, Expires: {not_after_str}")
 
-            if days_left < 8:
+            if days_left <= 3:
                 severity = "CRITICAL"
                 color = "red"
-            elif 8 <= days_left <= 60:  # Enviar alerta si <= 60 días
+            elif days_left < 8:
                 severity = "WARNING"
                 color = "#FFBF00" # Mustard/Amber
             else:
@@ -396,8 +396,8 @@ class SSLChecker:
         if result["status"] == "ERROR" and result["expires"] == "Unknown":
             return
 
-        # Solo enviar alerta si quedan <= 60 días
-        if result["days_left"] <= 60:
+        # Solo enviar alerta si quedan <= 3 días
+        if result["days_left"] <= 3:
             self.send_alert(
                 hostname, 
                 result["days_left"], 

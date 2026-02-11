@@ -148,6 +148,7 @@ def construir_html_resumen(
     # Mapping de nombres para el header
     display_names = {
         "driverapp_goto": "Go 2 Logistics",
+        "klc": "T4DRIVER API - KLC",
         "klc_crossdock": "KLC Crossdock",
     }
     display_name = display_names.get(app_key, app_name)
@@ -189,10 +190,11 @@ def _get_subject(app_key: str, dia: date) -> str:
         "driverapp_goto": f"[DRIVERAPP - GO 2 LOGISTICS] Errors {date_str}",
         "goexperior": f"[DRIVERAPP - GOEXPERIOR] Errors {date_str}",
         "accuratecargo": f"[T4APP - ACCURATECARGO] Errors {date_str}",
-        "klc": f"[T4APP - KLC] Errors {date_str}",
+        "klc": f"[T4DRIVER API - KLC] Errors {date_str}",
         "broker_goto": f"[BROKER - GO 2 LOGISTICS] Errors {date_str}",
         "klc_crossdock": f"[T4APP - KLC CROSSDOCK] Errors {date_str}",
         "t4tms_backend": f"[T4TMS - BACKEND] Errors {date_str}",
+        "t4trans": f"[T4TRANS - NOTIFICACIONES] Errors {date_str}",
     }
     
     # Fallback genérico si agregamos nuevas apps
@@ -208,12 +210,14 @@ def _get_sender_name(app_key: str, subject: str) -> str:
     """
     sender_name = "driverapp-logs" # Default
     
-    # Caso especial para KLC Crossdock y T4TMS Backend
+    # Caso especial para KLC Crossdock, T4TMS Backend, y T4TRANS
     if app_key == "klc_crossdock":
         sender_name = "klc-crossdock-logs"
     elif app_key == "t4tms_backend":
         sender_name = "t4tms"
-    elif "T4APP" in subject:
+    elif app_key == "t4trans":
+        sender_name = "t4trans-logs"
+    elif "T4APP" in subject or "T4DRIVER API" in subject:
         sender_name = "t4app-logs"
     elif "BROKER" in subject:
         sender_name = "broker-logs"

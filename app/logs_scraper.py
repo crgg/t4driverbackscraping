@@ -40,6 +40,10 @@ def fetch_logs_html(session, fecha_str: str, app_key: str = "driverapp_goto") ->
     if app_key == "t4app_admin" or auth_type == "jwt_api":
         return _fetch_logs_from_json_api(session, fecha_str, app_key)
     
+    # Special handling for T4TRANS which uses direct log file URLs
+    if app_key == "t4trans" or auth_type == "t4trans_custom":
+        return _fetch_logs_t4trans(session, fecha_str, app_key)
+    
     # 1) Obtenemos la URL base de logs para esa app
     _, _, logs_url = get_app_urls(app_key)
 
@@ -119,6 +123,141 @@ def fetch_logs_html(session, fecha_str: str, app_key: str = "driverapp_goto") ->
     # debug_path.write_text(logs_html, encoding="utf-8")
 
     return logs_html
+
+
+def _fetch_logs_t4trans(session, fecha_str: str, app_key: str) -> str:
+    """
+    Fetches logs from T4TRANS which uses direct log file URLs.
+    
+    Unlike other Laravel apps that use encrypted token links (?l=...),
+    T4TRANS provides direct links like: /t4notification/logs/laravel-2026-02-11.log
+    """
+    from urllib.parse import urljoin
+    from bs4 import BeautifulSoup
+    from datetime import datetime, timedelta
+    from app.config import get_app_urls
+    
+    _, _, logs_url = get_app_urls(app_key)
+    
+    # Step 1: Get list of available log files
+    resp_index = session.get(logs_url, timeout=60)
+    resp_index.raise_for_status()
+    
+    soup = BeautifulSoup(resp_index.text, "html.parser")
+    
+    # Step 2: Find all links that contain .log
+    log_links = [a for a in soup.find_all('a', href=True) if '.log' in a.get_text()]
+    
+    # Build target filename
+    target_filename = f"laravel-{fecha_str}.log"
+    
+    # Find the link for the requested date
+    link_tag = None
+    for a in log_links:
+        if a.get_text(strip=True) == target_filename:
+            link_tag = a
+            break
+    
+    # If not found, try previous day as fallback
+    if link_tag is None:
+        fecha_hoy = datetime.now().date()
+        fecha_solicitada_obj = datetime.strptime(fecha_str, "%Y-%m-%d").date()
+        
+        # Don't use fallback for future dates
+        if fecha_solicitada_obj > fecha_hoy:
+            available_files = [a.get_text(strip=True) for a in log_links]
+            msg = (
+                f"⚠️ No se puede procesar fecha futura {fecha_str} en {app_key}. "
+                f"Archivos disponibles: {available_files}"
+            )
+            raise RuntimeError(msg)
+        
+        # Try previous day
+        fecha_anterior_obj = fecha_solicitada_obj - timedelta(days=1)
+        fecha_anterior_str = fecha_anterior_obj.strftime("%Y-%m-%d")
+        target_filename_anterior = f"laravel-{fecha_anterior_str}.log"
+        
+        print(f"   ⚠️ No se encontró log para {fecha_str}, intentando con {fecha_anterior_str}...")
+        
+        for a in log_links:
+            if a.get_text(strip=True) == target_filename_anterior:
+                link_tag = a
+                print(f"   ✓ Usando logs del día anterior ({fecha_anterior_str})")
+                break
+    
+    # If still not found, check for stale logs or error
+    if link_tag is None:
+        available_files = [a.get_text(strip=True) for a in log_links]
+        
+        # Check if logs are stale (2+ days old)
+        most_recent_date, days_old = _get_most_recent_log_date_from_links(log_links)
+        
+        if most_recent_date and days_old >= 2:
+            msg = (
+                f"WARNING: Log files have not been created for two or more days in {app_key}. "
+                f"Most recent log: {most_recent_date} ({days_old} days old). "
+                f"Requested: {fecha_str}. Available files: {available_files}"
+            )
+            raise StaleLogsError(msg, app_key, fecha_str, days_old, most_recent_date)
+        else:
+            msg = (
+                f"No se encontró log para {fecha_str} ni para el día anterior en {app_key}. "
+                f"Archivos disponibles: {available_files}"
+            )
+            raise RuntimeError(msg)
+    
+    # Step 3: Get the direct URL from the link
+    href = link_tag.get("href") or ""
+    
+    # The href can be absolute or relative
+    if href.startswith('http'):
+        log_file_url = href
+    else:
+        log_file_url = urljoin(logs_url, href)
+    
+    # Step 4: Fetch the log file content
+    resp_day = session.get(log_file_url, timeout=60)
+    resp_day.raise_for_status()
+    logs_html = resp_day.text
+    
+    return logs_html
+
+
+def _get_most_recent_log_date_from_links(log_links: list) -> tuple:
+    """
+    Extract the most recent date from a list of log file links.
+    
+    Args:
+        log_links: List of BeautifulSoup <a> tag elements containing log filenames
+        
+    Returns:
+        tuple: (most_recent_date, days_old) or (None, None) if no valid dates found
+    """
+    import re
+    from datetime import datetime
+    
+    date_pattern = re.compile(r'laravel-(\d{4}-\d{2}-\d{2})\.log')
+    log_dates = []
+    
+    for a in log_links:
+        text = a.get_text(strip=True)
+        match = date_pattern.match(text)
+        if match:
+            try:
+                log_date = datetime.strptime(match.group(1), "%Y-%m-%d").date()
+                log_dates.append(log_date)
+            except ValueError:
+                continue
+    
+    if not log_dates:
+        return None, None
+    
+    most_recent = max(log_dates)
+    today = datetime.now().date()
+    days_old = (today - most_recent).days
+    
+    return most_recent, days_old
+
 
 
 def _fetch_logs_from_json_api(session, fecha_str: str, app_key: str) -> str:
@@ -332,15 +471,102 @@ def _resumir_mensaje(texto: str) -> str:
     return texto
 
 
-def classify_logs(html: str):
+def classify_logs_t4trans(html: str):
+    """
+    Parser personalizado para T4TRANS.
+    
+    Los errores en T4TRANS están después del texto "local.debug:" 
+    y no siguen la estructura de tabla estándar de Laravel.
+    
+    Clasificación:
+    - Si el mensaje contiene '"error"' (o su HTML entity &quot;error&quot;) → NO CONTROLADO
+    - Si NO contiene '"error"' → CONTROLADO
+    
+    Returns:
+        (errores_controlados, errores_no_controlados) como listas de strings
+    """
+    from bs4 import BeautifulSoup
+    import re
+    
+    soup = BeautifulSoup(html, "html.parser")
+    
+    errores_controlados = []
+    errores_no_controlados = []
+    
+    # Obtener todo el texto del HTML
+    page_text = soup.get_text()
+    
+    # Patrón más robusto para capturar entradas local.DEBUG o local.INFO
+    # Captura timestamp y mensaje hasta el siguiente timestamp o fin de texto
+    # El patrón maneja saltos de línea dentro del mensaje
+    pattern = r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] local\.(DEBUG|INFO|ERROR|WARNING): (.*?)(?=\n\[|\Z)'
+    
+    matches = re.finditer(pattern, page_text, re.IGNORECASE | re.DOTALL)
+    
+    debug_count = 0
+    for match in matches:
+        timestamp = match.group(1)
+        level = match.group(2).upper()
+        message = match.group(3).strip()
+        
+        # Solo procesar DEBUG entries (como especificó el usuario)
+        if level != "DEBUG":
+            continue
+        
+        debug_count += 1
+        
+        # Limpiar mensaje de saltos de línea excesivos
+        message = ' '.join(message.split())
+        
+        # Si el mensaje está vacío, omitir
+        if not message:
+            continue
+        
+        # Clasificar según si contiene "error" (puede estar como &quot;error&quot; o "error")
+        # Buscamos tanto la versión HTML entity como la versión normal
+        has_error_key = ('"error"' in message or '&quot;error&quot;' in message or 
+                        '\\"error\\"' in message or '\"error\"' in message)
+        
+        if has_error_key:
+            tipo_lista = errores_no_controlados
+        else:
+            tipo_lista = errores_controlados
+        
+        # Formato similar al estándar: ERROR - local - timestamp - mensaje
+        # Usamos "ERROR" para que se procese como error aunque sea DEBUG level
+        log_line = f"ERROR - local - {timestamp} - {message}"
+        tipo_lista.append(log_line)
+    
+    # Debug: imprimir contadores
+    print(f"   ℹ️ T4TRANS parser: Procesó {debug_count} entradas local.DEBUG")
+    print(f"      Controlados: {len(errores_controlados)}, No controlados: {len(errores_no_controlados)}")
+    
+    return errores_controlados, errores_no_controlados
+
+
+def classify_logs(html: str, app_key: str = None):
     """
     Parsea el HTML, se queda con Level = error,
     y los separa en controlados / no controlados.
+    
+    Si app_key es 't4trans', usa el parser personalizado.
 
     Devuelve (errores_controlados, errores_no_controlados) como listas de strings,
     donde cada string tiene el formato:
         ERROR - production - 2025-11-26 14:30:44 - Mensaje resumido
     """
+    # Check if this app needs custom parsing
+    if app_key == "t4trans":
+        return classify_logs_t4trans(html)
+    
+    # Detect if app_key has custom auth_type
+    if app_key:
+        from app.config import APPS_CONFIG
+        config = APPS_CONFIG.get(app_key, {})
+        auth_type = config.get('auth_type', '')
+        if auth_type == "t4trans_custom":
+            return classify_logs_t4trans(html)
+    
     soup = BeautifulSoup(html, "html.parser")
 
     # AJUSTA este selector a tu HTML real si hace falta

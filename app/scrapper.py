@@ -35,7 +35,7 @@ def procesar_aplicacion(app_key: str, fecha_str: str, dia: date, max_retries: in
         # except Exception as e:
         #     print(f"Error saving debug file: {e}")
 
-        controlados, no_controlados = classify_logs(html)
+        controlados, no_controlados = classify_logs(html, app_key)
 
     # 2) Separar en NUEVOS vs AVISADOS usando la BD
     controlados_nuevos, controlados_avisados = dividir_nuevos_y_avisados(
