@@ -84,7 +84,7 @@ APPS_CONFIG_LEGACY: Dict[str, Dict] = {
         "auth_type": "jwt_api",  # Special marker for JWT API auth
     },
     "t4trans": {
-        "name": "T4TRANS - NOTIFICACIONES",
+        "name": "T4NOTIFICATIONS",
         "base_url": "https://core.t4trans.com",
         "login_path": "/t4notification/login",  # T4Notification has its own login
         "logs_path": "/t4notification/logs",

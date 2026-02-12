@@ -89,7 +89,7 @@ def _format_error_message_email_style(app_name: str, app_key: str, dia: date, nc
     Returns:
         Formatted message string, or None if no uncontrolled errors
     """
-    # Only send if there are uncontrolled errors (same as email)
+    # Only send if there are uncontrolled errors (avoid spam from controlled-only errors)
     if not nc_errors:
         return None
     

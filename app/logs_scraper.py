@@ -475,12 +475,10 @@ def classify_logs_t4trans(html: str):
     """
     Parser personalizado para T4TRANS.
     
-    Los errores en T4TRANS están después del texto "local.debug:" 
-    y no siguen la estructura de tabla estándar de Laravel.
-    
-    Clasificación:
-    - Si el mensaje contiene '"error"' (o su HTML entity &quot;error&quot;) → NO CONTROLADO
-    - Si NO contiene '"error"' → CONTROLADO
+    Clasificación actualizada:
+    - local.ERROR → Errores NO CONTROLADOS
+    - local.DEBUG con palabra "error" → Errores CONTROLADOS
+    - local.DEBUG sin "error" → Ignorar
     
     Returns:
         (errores_controlados, errores_no_controlados) como listas de strings
@@ -504,16 +502,12 @@ def classify_logs_t4trans(html: str):
     matches = re.finditer(pattern, page_text, re.IGNORECASE | re.DOTALL)
     
     debug_count = 0
+    error_count = 0
+    
     for match in matches:
         timestamp = match.group(1)
         level = match.group(2).upper()
         message = match.group(3).strip()
-        
-        # Solo procesar DEBUG entries (como especificó el usuario)
-        if level != "DEBUG":
-            continue
-        
-        debug_count += 1
         
         # Limpiar mensaje de saltos de línea excesivos
         message = ' '.join(message.split())
@@ -522,24 +516,30 @@ def classify_logs_t4trans(html: str):
         if not message:
             continue
         
-        # Clasificar según si contiene "error" (puede estar como &quot;error&quot; o "error")
-        # Buscamos tanto la versión HTML entity como la versión normal
-        has_error_key = ('"error"' in message or '&quot;error&quot;' in message or 
-                        '\\"error\\"' in message or '\"error\"' in message)
-        
-        if has_error_key:
-            tipo_lista = errores_no_controlados
-        else:
-            tipo_lista = errores_controlados
-        
-        # Formato similar al estándar: ERROR - local - timestamp - mensaje
-        # Usamos "ERROR" para que se procese como error aunque sea DEBUG level
-        log_line = f"ERROR - local - {timestamp} - {message}"
-        tipo_lista.append(log_line)
+        # Clasificar según el nivel
+        if level == "ERROR":
+            # local.ERROR → NO CONTROLADO
+            error_count += 1
+            log_line = f"ERROR - local - {timestamp} - {message}"
+            errores_no_controlados.append(log_line)
+            
+        elif level == "DEBUG":
+            # local.DEBUG → Solo si contiene "error" es CONTROLADO
+            # Buscar la palabra "error" en diferentes formatos
+            has_error_key = ('error' in message.lower() or 
+                            '"error"' in message or 
+                            '&quot;error&quot;' in message or 
+                            '\\"error\\"' in message or 
+                            '\"error\"' in message)
+            
+            if has_error_key:
+                debug_count += 1
+                log_line = f"ERROR - local - {timestamp} - {message}"
+                errores_controlados.append(log_line)
+            # Si no tiene "error", se ignora (no se agrega a ninguna lista)
     
     # Debug: imprimir contadores
-    print(f"   ℹ️ T4TRANS parser: Procesó {debug_count} entradas local.DEBUG")
-    print(f"      Controlados: {len(errores_controlados)}, No controlados: {len(errores_no_controlados)}")
+    print(f"   ℹ️ T4TRANS parser: {error_count} local.ERROR (no controlados), {debug_count} local.DEBUG con 'error' (controlados)")
     
     return errores_controlados, errores_no_controlados
 
