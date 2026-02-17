@@ -1,6 +1,7 @@
 # t4alerts_automation/main.py
 import os
 import sys
+import requests
 from datetime import date, datetime
 
 # Ensure the root directory is in sys.path to find shared modules (app, db, sms, etc.)
@@ -15,7 +16,7 @@ from db import (
     reset_alerted_errors_for_date,
 )
 from app.scrapper import procesar_aplicacion
-from app.notifier import notificar_app, notificar_fecha_futura, notificar_logs_desactualizados
+from app.notifier import notificar_app, notificar_fecha_futura, notificar_logs_desactualizados, notificar_error_conexion
 from app.logs_scraper import StaleLogsError
 
 
@@ -117,6 +118,22 @@ def main() -> None:
                 fecha_str=e.fecha_str,
                 days_old=e.days_old,
                 most_recent_date=str(e.most_recent_date)
+            )
+            continue
+            
+        except requests.exceptions.ConnectionError as e:
+            # Error de conexión recurrente después de múltiples intentos
+            app_name_conn = apps_config.get(app_key, {}).get('name', app_key)
+            error_msg = str(e)
+            print(f"🚨 {app_name_conn}: CONNECTION ERROR - {error_msg}")
+            
+            # Enviar notificaciones críticas
+            notificar_error_conexion(
+                app_key=app_key,
+                app_name=app_name_conn,
+                fecha_str=fecha_str,
+                error_message=error_msg,
+                max_retries=3
             )
             continue
             

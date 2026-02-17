@@ -199,3 +199,95 @@ def notificar_logs_desactualizados(app_key: str, app_name: str, fecha_str: str, 
         print(f"✓ Slack de alerta de logs desactualizados enviado para {app_name}")
     except Exception as e:
         print(f"⚠️ Error enviando Slack de logs desactualizados: {e}")
+
+
+def notificar_error_conexion(app_key: str, app_name: str, fecha_str: str, error_message: str, max_retries: int = 3) -> None:
+    """
+    Envía notificaciones críticas indicando que hubo errores de conexión recurrentes después de múltiples intentos.
+    
+    Args:
+        app_key: Clave de la aplicación
+        app_name: Nombre de la aplicación
+        fecha_str: Fecha solicitada (YYYY-MM-DD)
+        error_message: Mensaje de error detallado
+        max_retries: Número de intentos realizados antes de fallar
+    """
+    from app.alerts import send_email, default_recipients
+    from slack_comunication import enviar_aviso_slack
+    from google_chat import enviar_aviso_gchat
+    
+    # Mensaje principal
+    mensaje_texto = (
+        f"CRITICAL: Recurring connection errors prevented log analysis. "
+        f"Failed after {max_retries} retry attempts. "
+        f"This may hide critical application errors that need immediate attention."
+    )
+    
+    # 1. Email con formato de alerta crítica
+    subject = f"🚨 [{app_name}] Critical Connection Error After {max_retries} Retries"
+    
+    html_body = f"""
+    <div style="background-color: #fee; border-left: 4px solid #c00; padding: 15px; margin: 10px 0;">
+        <h3 style="color: #c00; margin-top: 0;">🚨 CRITICAL: Recurring Connection Error</h3>
+        <p><strong>Application:</strong> {app_name}</p>
+        <p><strong>Requested Date:</strong> {fecha_str}</p>
+        <p><strong>Retry Attempts:</strong> {max_retries}</p>
+        <hr style="border: 1px solid #c00;">
+        <p style="color: #c00; font-weight: bold;">{mensaje_texto}</p>
+        <p style="background-color: #fff; padding: 10px; border-left: 3px solid #666; margin: 10px 0;">
+            <strong>Error Details:</strong><br>
+            <code style="color: #666; font-size: 0.9em;">{error_message}</code>
+        </p>
+        <p style="color: #666; font-size: 0.9em;">
+            ⚠️ <strong>WARNING:</strong> Connection failures may hide critical application errors 
+            (e.g., database connection issues, authentication failures, server crashes). 
+            Investigate infrastructure and application health immediately.
+        </p>
+    </div>
+    """
+    
+    # Determine sender name based on app_key
+    sender_name = "driverapp-alerts"  # Default
+    if app_key in ["klc", "accuratecargo", "klc_crossdock"]:
+        sender_name = "t4app-alerts"
+    elif app_key == "broker_goto":
+        sender_name = "brokerapp-alerts"
+    elif app_key == "t4tms_backend":
+        sender_name = "t4tms"
+    
+    try:
+        recipients = default_recipients()
+        send_email(subject, html_body, recipients, sender_name=sender_name)
+        print(f"✓ Correo de error de conexión enviado para {app_name}")
+    except Exception as e:
+        print(f"⚠️ Error enviando correo de conexión: {e}")
+    
+    # 2. Google Chat - Formato con emojis y markdown
+    gchat_msg = (
+        f"🚨 **CRITICAL: Recurring Connection Error**\n"
+        f"**Application:** {app_name}\n"
+        f"**Date Requested:** `{fecha_str}`\n"
+        f"**Retry Attempts:** {max_retries}\n"
+        f"**Error:** `{error_message[:200]}{'...' if len(error_message) > 200 else ''}`\n"
+        f"⚠️ _{mensaje_texto}_"
+    )
+    try:
+        enviar_aviso_gchat(gchat_msg)
+        print(f"✓ Google Chat de error de conexión enviado para {app_name}")
+    except Exception as e:
+        print(f"⚠️ Error enviando Google Chat de conexión: {e}")
+    
+    # 3. Slack - Formato con emojis y markdown
+    slack_msg = (
+        f"🚨 *CRITICAL: Recurring Connection Error*\n"
+        f"*Application:* {app_name}\n"
+        f"*Date Requested:* `{fecha_str}`\n"
+        f"*Retry Attempts:* {max_retries}\n"
+        f"*Error:* `{error_message[:200]}{'...' if len(error_message) > 200 else ''}`\n"
+        f"⚠️ _{mensaje_texto}_"
+    )
+    try:
+        enviar_aviso_slack(slack_msg)
+        print(f"✓ Slack de error de conexión enviado para {app_name}")
+    except Exception as e:
+        print(f"⚠️ Error enviando Slack de conexión: {e}")

@@ -121,8 +121,145 @@ def fetch_logs_html(session, fecha_str: str, app_key: str = "driverapp_goto") ->
     # # DEBUG - Guardamos para depurar, como ya hacías
     # debug_path = Path(f"debug_logs_{app_key}.html")
     # debug_path.write_text(logs_html, encoding="utf-8")
+    
+    # 4) Verificar si en lugar de la tabla hay un link de descarga (archivos grandes >50MB)
+    soup_check = BeautifulSoup(logs_html, "html.parser")
+    
+    # Buscar link de descarga con patrón ?dl=
+    download_link = soup_check.find('a', href=re.compile(r'\?dl='))
+    
+    if download_link:
+        # Escenario de archivo grande - descargar y procesar
+        logs_html = _download_and_process_large_log_file(session, logs_day_url, download_link, app_key)
 
     return logs_html
+
+
+def _download_and_process_large_log_file(session, base_url: str, download_link, app_key: str = "unknown") -> str:
+    """
+    Descarga un archivo de log grande y lo convierte a formato HTML tabla.
+    
+    Cuando los archivos de log exceden ~50MB, Laravel log viewer muestra un link
+    de descarga en vez de la tabla HTML. Esta función:
+    1. Descarga el archivo usando streaming
+    2. Parsea el contenido línea por línea
+    3. Convierte a formato HTML tabla compatible con classify_logs()
+    4. Limpia el archivo temporal
+    
+    Args:
+        session: Sesión autenticada
+        base_url: URL base para construir la URL de descarga
+        download_link: Elemento <a> de BeautifulSoup con el href de descarga
+        app_key: Identificador de la aplicación (para nombre de archivo temporal)
+        
+    Returns:
+        str: HTML con tabla conteniendo los logs procesados
+        
+    Raises:
+        requests.exceptions.RequestException: Si falla la descarga
+    """
+    import time
+    
+    # Extraer href del link de descarga (formato: ?dl=encrypted_token)
+    href = download_link.get('href') or ''
+    if not href:
+        print("   ⚠️ Link de descarga sin href, retornando HTML vacío")
+        return "<html><body><table><tbody></tbody></table></body></html>"
+    
+    # Construir URL completa de descarga
+    download_url = urljoin(base_url, href)
+    
+    # Crear archivo temporal con nombre único
+    temp_file = Path(f"/tmp/log_download_{app_key}_{int(time.time())}.log")
+    
+    try:
+        print(f"   ⚠️ Archivo de logs grande detectado (>50MB), descargando...")
+        
+        # Descargar con streaming para no llenar memoria
+        resp = session.get(download_url, stream=True, timeout=120)
+        resp.raise_for_status()
+        
+        # Obtener tamaño del archivo si está disponible
+        file_size = int(resp.headers.get('content-length', 0))
+        file_size_mb = file_size / (1024 * 1024) if file_size > 0 else 0
+        
+        # Escribir a archivo temporal en chunks
+        with open(temp_file, 'wb') as f:
+            for chunk in resp.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+        
+        actual_size_mb = temp_file.stat().st_size / (1024 * 1024)
+        print(f"   ✓ Archivo descargado: {temp_file.name} ({actual_size_mb:.2f} MB)")
+        
+        # Parsear el archivo línea por línea
+        html_rows = []
+        error_count = 0
+        
+        # Patrón para capturar logs de Laravel:
+        # [2026-02-15 10:55:43] production.ERROR: mensaje...
+        log_pattern = re.compile(
+            r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]\s+(\w+)\.(\w+):\s+(.*?)(?=\n\[|\Z)',
+            re.DOTALL
+        )
+        
+        with open(temp_file, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+            
+            for match in log_pattern.finditer(content):
+                timestamp = match.group(1)
+                context = match.group(2)  # production, local, etc.
+                level = match.group(3).upper()  # ERROR, DEBUG, INFO, etc.
+                message = match.group(4).strip()
+                
+                # Limpiar mensaje de saltos de línea excesivos
+                message = ' '.join(message.split())
+                
+                # Solo procesar errores (podemos filtrar otros niveles si queremos)
+                if level == 'ERROR':
+                    error_count += 1
+                    # Formato de fila HTML compatible con classify_logs()
+                    row_html = f"""
+                    <tr>
+                        <td>error</td>
+                        <td>{context}</td>
+                        <td>{timestamp}</td>
+                        <td>{message}</td>
+                    </tr>
+                    """
+                    html_rows.append(row_html)
+        
+        print(f"   ✓ Procesados {error_count} errores del archivo")
+        
+        # Construir HTML tabla completa
+        table_html = f"""
+        <html>
+        <body>
+            <table>
+                <tbody>
+                    {''.join(html_rows)}
+                </tbody>
+            </table>
+        </body>
+        </html>
+        """
+        
+        return table_html
+        
+    except Exception as e:
+        print(f"   ⚠️ Error procesando archivo grande: {e}")
+        # Retornar HTML vacío en caso de error
+        return "<html><body><table><tbody></tbody></table></body></html>"
+        
+    finally:
+        # Limpiar archivo temporal
+        if temp_file.exists():
+            try:
+                temp_file.unlink()
+                print(f"   🗑️ Archivo temporal eliminado: {temp_file.name}")
+            except Exception as e:
+                print(f"   ⚠️ Error eliminando archivo temporal: {e}")
+
 
 
 def _fetch_logs_t4trans(session, fecha_str: str, app_key: str) -> str:
