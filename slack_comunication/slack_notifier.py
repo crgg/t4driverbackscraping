@@ -49,16 +49,27 @@ class SlackMessageFormatter:
         try:
             app_name = resultado.get("app_name", "App")
             no_controlados_nuevos = resultado.get("no_controlados_nuevos", [])
+            controlados_nuevos = resultado.get("controlados_nuevos", [])
             total_nc = len(no_controlados_nuevos)
+            total_c = len(controlados_nuevos)
             sql_count = SlackMessageFormatter._contar_errores_sql(no_controlados_nuevos)
             otros_count = total_nc - sql_count
             
-            # Mensaje simple
-            mensaje = (
-                f"🚨 *{app_name}*: {total_nc} UNCONTROLLED errors detected\n"
-                f"SQL: {sql_count} | Others: {otros_count}\n"
-                f"⚠️ Check logs immediately"
-            )
+            if total_nc > 0:
+                # Hay errores no controlados
+                mensaje = (
+                    f"🚨 *{app_name}*: {total_nc} UNCONTROLLED errors detected\n"
+                    f"SQL: {sql_count} | Others: {otros_count}\n"
+                )
+                if total_c > 0:
+                    mensaje += f"ℹ️ Also {total_c} controlled errors\n"
+                mensaje += "⚠️ Check logs immediately"
+            else:
+                # Solo errores controlados
+                mensaje = (
+                    f"ℹ️ *{app_name}*: {total_c} controlled errors registered\n"
+                    f"⚠️ Check logs for details"
+                )
             
             return mensaje
         
@@ -87,10 +98,16 @@ class SlackMessageFormatter:
             
             dia = resultado.get("dia", date.today())
             no_controlados_nuevos = resultado.get("no_controlados_nuevos", [])
+            controlados_nuevos = resultado.get("controlados_nuevos", [])
             
             total_nc = len(no_controlados_nuevos)
+            total_c = len(controlados_nuevos)
             sql_count = SlackMessageFormatter._contar_errores_sql(no_controlados_nuevos)
             otros_count = total_nc - sql_count
+            
+            # Determine header based on error types present
+            only_controlled = total_nc == 0 and total_c > 0
+            header_text = "ℹ️ Controlled Errors Registered" if only_controlled else "🚨 UNCONTROLLED Errors Detected"
             
             # Construir bloques
             bloques = []
@@ -100,7 +117,7 @@ class SlackMessageFormatter:
                 "type": "header",
                 "text": {
                     "type": "plain_text",
-                    "text": f"🚨 UNCONTROLLED Errors Detected",
+                    "text": header_text,
                     "emoji": True
                 }
             })
@@ -119,11 +136,11 @@ class SlackMessageFormatter:
                     },
                     {
                         "type": "mrkdwn",
-                        "text": f"*Total Errors:*\n{total_nc}"
+                        "text": f"*Uncontrolled Errors:*\n{total_nc}"
                     },
                     {
                         "type": "mrkdwn",
-                        "text": f"*App Key:*\n`{app_key}`"
+                        "text": f"*Controlled Errors:*\n{total_c}"
                     }
                 ]
             })
@@ -131,23 +148,23 @@ class SlackMessageFormatter:
             # Divisor
             bloques.append({"type": "divider"})
             
-            # Categorización de errores
-            bloques.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": (
-                        f"*📊 Categorization:*\n"
-                        f"• SQL Errors: `{sql_count}`\n"
-                        f"• Other errors: `{otros_count}`"
-                    )
-                }
-            })
-            
-            # Muestras de errores (máximo 3)
-            if no_controlados_nuevos:
+            if not only_controlled:
+                # Categorización de errores no controlados
+                bloques.append({
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": (
+                            f"*📊 Uncontrolled categorization:*\n"
+                            f"• SQL Errors: `{sql_count}`\n"
+                            f"• Other errors: `{otros_count}`"
+                        )
+                    }
+                })
                 bloques.append({"type": "divider"})
-                
+            
+            # Muestras de errores no controlados (máximo 3)
+            if no_controlados_nuevos:
                 errores_muestra = no_controlados_nuevos[:3]
                 errores_texto = "\n".join([
                     f"{i+1}. `{error[:100]}{'...' if len(error) > 100 else ''}`"
@@ -158,7 +175,7 @@ class SlackMessageFormatter:
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*🔍 Error sample:*\n{errores_texto}"
+                        "text": f"*🔍 Uncontrolled error sample:*\n{errores_texto}"
                     }
                 })
                 
@@ -172,9 +189,37 @@ class SlackMessageFormatter:
                             }
                         ]
                     })
+                bloques.append({"type": "divider"})
+            
+            # Muestras de errores controlados (máximo 3)
+            if controlados_nuevos:
+                errores_ctrl_muestra = controlados_nuevos[:3]
+                errores_ctrl_texto = "\n".join([
+                    f"{i+1}. `{error[:100]}{'...' if len(error) > 100 else ''}`"
+                    for i, error in enumerate(errores_ctrl_muestra)
+                ])
+                
+                bloques.append({
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*ℹ️ Controlled error sample:*\n{errores_ctrl_texto}"
+                    }
+                })
+                
+                if len(controlados_nuevos) > 3:
+                    bloques.append({
+                        "type": "context",
+                        "elements": [
+                            {
+                                "type": "mrkdwn",
+                                "text": f"_+ {len(controlados_nuevos) - 3} controlled errors more..._"
+                            }
+                        ]
+                    })
+                bloques.append({"type": "divider"})
             
             # Footer con llamada a la acción
-            bloques.append({"type": "divider"})
             bloques.append({
                 "type": "section",
                 "text": {
@@ -240,12 +285,13 @@ def enviar_slack_errores_no_controlados(resultado: Dict[str, Any]) -> bool:
     """
     app_name = resultado.get("app_name", "App")
     no_controlados_nuevos = resultado.get("no_controlados_nuevos", [])
+    controlados_nuevos = resultado.get("controlados_nuevos", [])
     
-    # Solo enviar notificación si hay errores NO controlados
-    if not no_controlados_nuevos:
+    # Enviar notificación si hay errores NO controlados O errores controlados
+    if not no_controlados_nuevos and not controlados_nuevos:
         logger.info(
             f"ℹ️ No se envía notificación de Slack para {app_name}: "
-            "No hay errores NO controlados nuevos"
+            "No hay errores nuevos (ni controlados ni no controlados)"
         )
         return False
     
@@ -276,7 +322,8 @@ def enviar_slack_errores_no_controlados(resultado: Dict[str, Any]) -> bool:
         if exito:
             logger.info(
                 f"✅ Notificación de Slack enviada para {app_name}: "
-                f"{len(no_controlados_nuevos)} errores NO controlados"
+                f"{len(no_controlados_nuevos)} errores NO controlados, "
+                f"{len(controlados_nuevos)} errores controlados"
             )
         else:
             logger.warning(

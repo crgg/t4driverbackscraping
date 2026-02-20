@@ -87,10 +87,10 @@ def _format_error_message_email_style(app_name: str, app_key: str, dia: date, nc
         c_errors: List of controlled errors from get_daily_errors()
     
     Returns:
-        Formatted message string, or None if no uncontrolled errors
+        Formatted message string, or None if no errors at all
     """
-    # Only send if there are uncontrolled errors (avoid spam from controlled-only errors)
-    if not nc_errors:
+    # Only skip notification if there are NO errors of any type
+    if not nc_errors and not c_errors:
         return None
     
     lines = []
@@ -99,20 +99,21 @@ def _format_error_message_email_style(app_name: str, app_key: str, dia: date, nc
     lines.append(f"**Company: {app_name} — {dia.isoformat()}**")
     lines.append("")
     
-    # Errors section (uncontrolled)
-    lines.append("**Errors**")
-    for err in nc_errors[:20]:  # Limit to 20 to avoid message size limits
-        fecha_str = err["first_time"].strftime("%Y-%m-%d %H:%M:%S")
-        firma = err["firma"]
+    if nc_errors:
+        # Errors section (uncontrolled)
+        lines.append("**Errors**")
+        for err in nc_errors[:20]:  # Limit to 20 to avoid message size limits
+            fecha_str = err["first_time"].strftime("%Y-%m-%d %H:%M:%S")
+            firma = err["firma"]
+            
+            # Truncate very long error messages for Google Chat
+            if len(firma) > 200:
+                firma = firma[:197] + "..."
+            
+            lines.append(f"`{fecha_str}` — {firma} **(x{err['count']})**")
         
-        # Truncate very long error messages for Google Chat
-        if len(firma) > 200:
-            firma = firma[:197] + "..."
-        
-        lines.append(f"`{fecha_str}` — {firma} **(x{err['count']})**")
-    
-    if len(nc_errors) > 20:
-        lines.append(f"_...y {len(nc_errors) - 20} errores más_")
+        if len(nc_errors) > 20:
+            lines.append(f"_...y {len(nc_errors) - 20} errores más_")
     
     # Errors (controlled) section - only if there are any
     if c_errors:

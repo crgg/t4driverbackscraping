@@ -12,7 +12,7 @@ from cryptography.x509.oid import NameOID
 from collections import namedtuple
 
 from app.config import APPS_CONFIG
-from app.alerts import send_email, default_recipients
+from mailer.client import send_email, default_recipients
 
 # Setup Logging
 logger = logging.getLogger(__name__)

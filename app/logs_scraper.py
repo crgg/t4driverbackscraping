@@ -215,8 +215,15 @@ def _download_and_process_large_log_file(session, base_url: str, download_link, 
                 # Limpiar mensaje de saltos de línea excesivos
                 message = ' '.join(message.split())
                 
-                # Solo procesar errores (podemos filtrar otros niveles si queremos)
-                if level == 'ERROR':
+                is_error = level == 'ERROR'
+                is_info_with_error = level == 'INFO' and (
+                    '"error":' in message.lower() or
+                    '&quot;error&quot;:' in message.lower() or
+                    '\\"error\\":' in message.lower()
+                )
+                
+                # Solo procesar errores (e INFO con errors embebidos)
+                if is_error or is_info_with_error:
                     error_count += 1
                     # Formato de fila HTML compatible con classify_logs()
                     row_html = f"""
@@ -660,8 +667,8 @@ def classify_logs_t4trans(html: str):
             log_line = f"ERROR - local - {timestamp} - {message}"
             errores_no_controlados.append(log_line)
             
-        elif level == "DEBUG":
-            # local.DEBUG → Solo si contiene "error" es CONTROLADO
+        elif level in ("DEBUG", "INFO"):
+            # local.DEBUG o INFO → Solo si contiene "error" es CONTROLADO
             # Buscar la palabra "error" en diferentes formatos
             has_error_key = ('error' in message.lower() or 
                             '"error"' in message or 
@@ -728,8 +735,18 @@ def classify_logs(html: str, app_key: str = None):
         # Si la tabla tiene más de 4 columnas, nos quedamos con las primeras 4
         level, context, fecha, content = cols[:4]
 
-        # Solo nos interesan los que tienen Level = error
-        if level.lower() != "error":
+        level_lower = level.lower()
+        content_lower = content.lower()
+        
+        is_error = level_lower == "error"
+        is_info_with_error = level_lower == "info" and (
+            '"error":' in content_lower or
+            '&quot;error&quot;:' in content_lower or
+            '\\"error\\":' in content_lower
+        )
+
+        # Solo nos interesan los que tienen Level = error o INFO con payload de error
+        if not (is_error or is_info_with_error):
             continue
 
         total_errors += 1

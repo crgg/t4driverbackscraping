@@ -1,4 +1,6 @@
-# app/alerts.py  (proyecto de logs)
+# mailer/client.py
+# Moved from app/alerts.py
+# Cliente SMTP del proyecto T4Alerts.
 import os
 import smtplib
 import logging
@@ -80,7 +82,7 @@ def default_recipients(owner_email: str | None = None) -> list[str]:
     to_env = os.getenv("ALERT_EMAIL_TO")
     if to_env:
         # Soporte para múltiples destinatarios separados por coma
-        return [email.strip() for email in to_env.split(',') if email.strip()]
+        return [e.strip() for e in to_env.split(',') if e.strip()]
 
     fallback = os.getenv("MAIL_USERNAME")
     return [fallback] if fallback else []

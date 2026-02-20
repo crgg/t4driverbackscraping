@@ -13,7 +13,7 @@ mock_config = MagicMock()
 mock_config.get_app_urls.return_value = ("url1", "url2", "http://logs.com")
 sys.modules["app.config"] = mock_config
 
-from app.email_notifier import construir_html_resumen
+from mailer.builder import construir_html_resumen
 
 # Setup dummy logs
 LOG_DIR = Path("salida_logs")

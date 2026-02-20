@@ -7,7 +7,7 @@ Script de prueba para verificar el formato de mensajes SQL
 import sys
 sys.path.insert(0, '/Users/administrator/Desktop/scrapping_project')
 
-from app.email_notifier import _formatear_mensaje_sql
+from mailer.builder import _formatear_mensaje_sql
 
 # Casos de prueba con ejemplos reales del usuario
 test_cases = [

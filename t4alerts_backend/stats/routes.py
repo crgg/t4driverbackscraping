@@ -521,13 +521,7 @@ def send_error_email_endpoint():
              return jsonify({'error': 'No valid recipients provided'}), 400
 
         # Import sender dynamically with correct path check
-        try:
-            from app.alerts import send_email
-        except ImportError:
-            # Fallback for when running from different contexts
-            import sys
-            sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-            from app.alerts import send_email
+        from mailer.client import send_email
         
         # Format body as HTML 
         # We trust the frontend to send properly formatted HTML with styles

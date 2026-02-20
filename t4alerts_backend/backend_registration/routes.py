@@ -5,9 +5,7 @@ from t4alerts_backend.common.models import User
 from t4alerts_backend.common.utils import logger
 import sys
 import os
-# Add parent directory to path to access app.alerts
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from app.alerts import send_email # Import from parent project
+from mailer.client import send_email # Moved to mailer module
 
 registration_bp = Blueprint('registration', __name__)
 

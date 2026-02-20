@@ -1,10 +1,12 @@
-# app/email_notifier.py
+# mailer/builder.py
+# Moved from app/email_notifier.py
+# Constructor de contenido HTML para correos del proyecto T4Alerts.
 from datetime import date, datetime
 from pathlib import Path
 from typing import List, Tuple
 
-from .alerts import send_email, default_recipients
-from .log_stats import (
+from mailer.client import send_email, default_recipients
+from app.log_stats import (
     resumen_por_fecha,
     url_logs_para_dia,
 )
@@ -88,16 +90,6 @@ def _html_lista_errores(titulo: str, errors: List[dict], empty_msg: str = "Sin e
     for err in errors:
         fecha_str = err["first_time"].strftime("%Y-%m-%d %H:%M:%S")
         firma_formateada = _formatear_mensaje_sql(err["firma"])
-        
-        count_suffix = ""
-        # Mostrar cuenta, en negrita: (xN)
-        # O si el usuario prefiere "colocar al final la cantidad de veces que se repite, en negrita, por ejemplo x2"
-        # Asumo siempre mostramos la cantidad si > 1, o incluso si es 1 para consistencia?
-        # El ejemplo dice: "The current... (colocar al final la cantidad..., por ejemplo x2)"
-        # Si es 1 vez, quizá queda mejor no poner nada o poner (x1). Pondré (xN) siempre para ser claro, o solo si > 1.
-        # El request dice: "colocar al final la cantidad de veces que se repite, en negrita, por ejemplo x2" 
-        # Lo haré para todos.
-        
         lineas.append(f"<li><strong>{fecha_str}</strong> — {firma_formateada} <strong>(x{err['count']})</strong></li>")
         
     lineas.append("</ul>")
@@ -127,7 +119,7 @@ def construir_html_resumen(
         nc_errors = forced_data.get('nc_errors', [])
         c_errors = forced_data.get('c_errors', [])
     else:
-        from .log_stats import get_daily_errors
+        from app.log_stats import get_daily_errors
         
         # Obtener rutas específicas de la app
         no_controlados_path, controlados_path = _get_log_paths(app_key)
@@ -141,10 +133,6 @@ def construir_html_resumen(
 
     url_logs = url_logs_para_dia(dia, app_key)
 
-    # Construir HTML
-    # Formato Header: Company: GoTo Logistics — 2025-12-11
-    # Antes era azul, ahora negro (sin style color o color: black).
-    
     # Mapping de nombres para el header
     display_names = {
         "driverapp_goto": "Go 2 Logistics",
@@ -154,10 +142,6 @@ def construir_html_resumen(
     display_name = display_names.get(app_key, app_name)
     
     header = f'<h2>Company: {display_name} — {dia.isoformat()}</h2>'
-    
-    # "Errores (no controlados)" pasa a ser "Errores" y en rojo.
-    # "Errores (controlados)" se mantiene el texto (creo, el user dijo "donde dice Errores (controlados), ese subtitulo cambialo a color azul")
-    # pero para el primero dijo "donde dice Errores (no controlados), ahora debe decir Errores"
     
     html_nc = _html_lista_errores('<span style="color: red;">Errors</span>', nc_errors, empty_msg="No items.")
     html_c = _html_lista_errores('<span style="color: blue;">Errors (controlled)</span>', c_errors, empty_msg="No updates.")
@@ -179,13 +163,6 @@ def _get_subject(app_key: str, dia: date) -> str:
     """
     date_str = dia.isoformat()
     
-    # Mapping personalizado
-    # driverapp_goto -> [DRIVERAPP - GO 2 LOGISTICS]
-    # goexperior    -> [DRIVERAPP - GOEXPERIOR]
-    # accuratecargo -> [T4APP - ACCURATECARGO]
-    # klc           -> [T4APP - KLC]
-    # broker_goto   -> [BROKER - GO 2 LOGISTICS]
-    
     subjects = {
         "driverapp_goto": f"[DRIVERAPP - GO 2 LOGISTICS] Errors {date_str}",
         "goexperior": f"[DRIVERAPP - GOEXPERIOR] Errors {date_str}",
@@ -197,7 +174,6 @@ def _get_subject(app_key: str, dia: date) -> str:
         "t4trans": f"[T4NOTIFICATIONS] Errors {date_str}",
     }
     
-    # Fallback genérico si agregamos nuevas apps
     fallback_key = app_key.replace("_", " ").upper()
     base = subjects.get(app_key, f"[{fallback_key}] Errors {date_str}")
     
@@ -210,7 +186,6 @@ def _get_sender_name(app_key: str, subject: str) -> str:
     """
     sender_name = "driverapp-logs" # Default
     
-    # Caso especial para KLC Crossdock, T4TMS Backend, y T4TRANS
     if app_key == "klc_crossdock":
         sender_name = "klc-crossdock-logs"
     elif app_key == "t4tms_backend":
@@ -240,8 +215,8 @@ def enviar_resumen_por_correo(dia: date, app_name: str = "DriverApp GO2", app_ke
     """
     html, total_nc, total_c = construir_html_resumen(dia, app_name, app_key)
 
-    # Solo enviar si hay errores NO controlados (evitar spam de solo controlados)
-    if total_nc == 0:
+    # Enviar si hay errores controlados O no controlados (informar de cualquier actividad de error)
+    if total_nc == 0 and total_c == 0:
         return
 
     subject = _get_subject(app_key, dia)

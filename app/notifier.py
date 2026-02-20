@@ -1,79 +1,91 @@
 # app/notifier.py
-from typing import Dict, Any
+"""
+Orquestador de notificaciones — Strategy Pattern.
 
-from app.email_notifier import enviar_resumen_por_correo
-# from sms import enviar_sms_errores_no_controlados  # DESHABILITADO
-from slack_comunication import enviar_slack_errores_no_controlados
-from google_chat import enviar_gchat_errores_no_controlados, enviar_aviso_gchat
+Itera sobre CHANNELS enviando send_report() a cada canal.
+Para agregar o quitar un canal basta con modificar CHANNELS; este archivo
+no necesita cambios.
+
+Para reactivar SMS:
+    from sms.channel import SMSChannel
+    SMSChannel.ENABLED = True
+"""
+from __future__ import annotations
+
+import logging
+from typing import TYPE_CHECKING
+
+from app.notification_channel import NotificationChannel
+from mailer.channel import EmailChannel
+from slack_comunication.channel import SlackChannel
+from google_chat.channel import GChatChannel
+from sms.channel import SMSChannel
+
+if TYPE_CHECKING:
+    from app.result import ScrapingResult
+
+logger = logging.getLogger(__name__)
+
+# ------------------------------------------------------------------ registry --
+# Orden de envío: primero el más crítico/confiable.
+# SMSChannel retorna False automáticamente si ENABLED = False.
+CHANNELS: list[NotificationChannel] = [
+    EmailChannel(),
+    GChatChannel(),
+    SlackChannel(),
+    SMSChannel(),
+]
 
 
-def notificar_app(resultado: Dict[str, Any]) -> None:
+# ---------------------------------------------------------------- public API --
+
+def notificar_app(result: "ScrapingResult") -> None:
     """
-    Recibe el dict devuelto por procesar_aplicacion()
-    y envía notificaciones (correo, Google Chat, SMS y Slack).
+    Envía el reporte diario a todos los canales registrados en CHANNELS.
+
+    Args:
+        result: ScrapingResult devuelto por procesar_aplicacion().
     """
-    dia = resultado["dia"]
-    app_name = resultado["app_name"]
-    app_key = resultado["app_key"]
-
-    # Enviar correo electrónico
-    enviar_resumen_por_correo(dia, app_name, app_key)
-    print(f"✓ Correo enviado para {app_name}")
-    
-    # Enviar Google Chat (solo si hay errores NO controlados)
-    try:
-        gchat_enviado = enviar_gchat_errores_no_controlados(resultado)
-        if gchat_enviado:
-            print(f"✓ Google Chat enviado para {app_name}")
-    except Exception as e:
-        print(f"⚠️ Error enviando Google Chat para {app_name}: {e}")
-    
-    # Enviar SMS (solo si hay errores NO controlados) - DESHABILITADO
-    # sms_enviado = enviar_sms_errores_no_controlados(resultado)
-    # if sms_enviado:
-    #     print(f"✓ SMS enviado para {app_name}")
-    
-    # Enviar notificación a Slack (solo si hay errores NO controlados)
-    slack_enviado = enviar_slack_errores_no_controlados(resultado)
-    if slack_enviado:
-        print(f"✓ Notificación de Slack enviada para {app_name}")
+    for channel in CHANNELS:
+        try:
+            sent = channel.send_report(result)
+            if sent:
+                print(f"✓ {channel.name()} enviado para {result.app_name}")
+        except Exception as e:
+            print(f"⚠️ {channel.name()} falló para {result.app_name}: {e}")
+            logger.exception("Channel %s failed for %s", channel.name(), result.app_name)
 
 
+def _send_alert_all(message: str) -> None:
+    """Envía una alerta puntual a todos los canales activos."""
+    for channel in CHANNELS:
+        try:
+            channel.send_alert(message)
+        except Exception as e:
+            logger.warning("Alert via %s failed: %s", channel.name(), e)
+
+
+# ----------------------------------------------------- alert notifications ---
 
 def notificar_fecha_futura(app_key: str, app_name: str, fecha_str: str) -> None:
     """
-    Envía notificaciones indicando que se intentó consultar una fecha futura.
+    Notifica que se intentó consultar una fecha futura.
     """
-    from app.alerts import send_email, default_recipients
-    # from sms import enviar_aviso_sms  # DESHABILITADO
-    from slack_comunication import enviar_aviso_slack
-    from google_chat import enviar_aviso_gchat
-    
+    from mailer.client import send_email, default_recipients
+
     mensaje_texto = (
         f"The content for date {fecha_str} has not been created yet, "
         "please check back later."
     )
-    
-    # 1. Email
+
+    # Email (HTML enriquecido)
     subject = f"⚠️ [{app_name}] Future date query {fecha_str}"
-    
-    # HTML simple
     html_body = f"""
     <h3>Future Date Notice</h3>
     <p>Log query attempted for future date <strong>{fecha_str}</strong> in application <strong>{app_name}</strong>.</p>
     <p style="color: blue;">{mensaje_texto}</p>
     """
-    
-    # Determine sender name based on app_key
-    sender_name = "driverapp-alerts"  # Default
-    if app_key in ["klc", "accuratecargo"]:
-        sender_name = "t4app-alerts"
-    elif app_key == "broker_goto":
-        sender_name = "brokerapp-alerts"
-    elif app_key == "t4tms_backend":
-        sender_name = "t4tms"
-    # For driverapp_goto and goexperior, it stays as driverapp-alerts
-    
+    sender_name = _get_alert_sender(app_key)
     try:
         recipients = default_recipients()
         send_email(subject, html_body, recipients, sender_name=sender_name)
@@ -81,54 +93,37 @@ def notificar_fecha_futura(app_key: str, app_name: str, fecha_str: str) -> None:
     except Exception as e:
         print(f"⚠️ Error enviando correo de aviso: {e}")
 
-    # 2. SMS - Mensaje corto
-    # "App: [Name] - Future date [Date]. Content being created, check later."
-    # sms_msg = (
-    #     f"App: {app_name[:15]} - Future date {fecha_str}. "
-    #     "Content being created, check later."
-    # )
-    # enviar_aviso_sms(sms_msg)
-    
-    # 3. Google Chat
-    gchat_msg = (
-        f"⚠️ **{app_name}** - Future date query `{fecha_str}`\n"
-        f"ℹ️ {mensaje_texto}"
-    )
-    enviar_aviso_gchat(gchat_msg)
-    
-    # 4. Slack
-    slack_msg = (
+    # Resto de canales con texto plano
+    alert_msg = (
         f"⚠️ *{app_name}* - Future date query `{fecha_str}`\n"
         f"ℹ️ {mensaje_texto}"
     )
-    enviar_aviso_slack(slack_msg)
+    for channel in CHANNELS:
+        if isinstance(channel, EmailChannel):
+            continue  # ya enviado arriba con HTML
+        try:
+            channel.send_alert(alert_msg)
+        except Exception as e:
+            logger.warning("Alert (future date) via %s failed: %s", channel.name(), e)
 
 
-def notificar_logs_desactualizados(app_key: str, app_name: str, fecha_str: str, days_old: int, most_recent_date: str) -> None:
+def notificar_logs_desactualizados(
+    app_key: str,
+    app_name: str,
+    fecha_str: str,
+    days_old: int,
+    most_recent_date: str,
+) -> None:
     """
-    Envía notificaciones de peligro indicando que los archivos de log no se han actualizado en 2+ días.
-    
-    Args:
-        app_key: Clave de la aplicación
-        app_name: Nombre de la aplicación
-        fecha_str: Fecha solicitada (YYYY-MM-DD)
-        days_old: Número de días desde el último log
-        most_recent_date: Fecha del log más reciente encontrado
+    Notifica que los archivos de log no se han actualizado en 2+ días.
     """
-    from app.alerts import send_email, default_recipients
-    from sms import enviar_aviso_sms
-    from slack_comunication import enviar_aviso_slack
-    from google_chat import enviar_aviso_gchat
-    
-    # Mensaje principal en inglés según requerimiento
+    from mailer.client import send_email, default_recipients
+
     mensaje_texto = (
         f"WARNING: Log files have not been created for two or more days. "
         f"Most recent log is from {most_recent_date} ({days_old} days old)."
     )
-    
-    # 1. Email con formato de peligro
     subject = f"🚨 [{app_name}] WARNING: Stale Log Files ({days_old} days old)"
-    
     html_body = f"""
     <div style="background-color: #fee; border-left: 4px solid #c00; padding: 15px; margin: 10px 0;">
         <h3 style="color: #c00; margin-top: 0;">⚠️ DANGER: Stale Log Files Detected</h3>
@@ -139,93 +134,54 @@ def notificar_logs_desactualizados(app_key: str, app_name: str, fecha_str: str, 
         <hr style="border: 1px solid #c00;">
         <p style="color: #c00; font-weight: bold;">{mensaje_texto}</p>
         <p style="color: #666; font-size: 0.9em;">
-            This may indicate a critical issue with the application's logging system. 
+            This may indicate a critical issue with the application's logging system.
             Please investigate immediately.
         </p>
     </div>
     """
-    
-    # Determine sender name based on app_key
-    sender_name = "driverapp-alerts"  # Default
-    if app_key in ["klc", "accuratecargo", "klc_crossdock"]:
-        sender_name = "t4app-alerts"
-    elif app_key == "broker_goto":
-        sender_name = "brokerapp-alerts"
-    elif app_key == "t4tms_backend":
-        sender_name = "t4tms"
-    
     try:
         recipients = default_recipients()
-        send_email(subject, html_body, recipients, sender_name=sender_name)
+        send_email(subject, html_body, recipients, sender_name=_get_alert_sender(app_key))
         print(f"✓ Correo de alerta de logs desactualizados enviado para {app_name}")
     except Exception as e:
         print(f"⚠️ Error enviando correo de logs desactualizados: {e}")
-    
-    # 2. SMS - Mensaje corto y conciso
-    # sms_msg = (
-    #     f"🚨 {app_name[:20]} - STALE LOGS! "
-    #     f"Last update: {most_recent_date} ({days_old}d ago). Check urgently!"
-    # )
-    # try:
-    #     enviar_aviso_sms(sms_msg)
-    #     print(f"✓ SMS de alerta de logs desactualizados enviado para {app_name}")
-    # except Exception as e:
-    #     print(f"⚠️ Error enviando SMS de logs desactualizados: {e}")
-    
-    # 3. Google Chat - Formato con emojis y markdown
-    gchat_msg = (
-        f"🚨 **DANGER: Stale Log Files**\n"
-        f"**Application:** {app_name}\n"
-        f"**Requested:** `{fecha_str}`\n"
-        f"**Most Recent Log:** `{most_recent_date}` (*{days_old} days old*)\n"
-        f"⚠️ _{mensaje_texto}_"
-    )
-    try:
-        enviar_aviso_gchat(gchat_msg)
-        print(f"✓ Google Chat de alerta de logs desactualizados enviado para {app_name}")
-    except Exception as e:
-        print(f"⚠️ Error enviando Google Chat de logs desactualizados: {e}")
-    
-    # 4. Slack - Formato con emojis y markdown
-    slack_msg = (
+
+    alert_msg = (
         f"🚨 *DANGER: Stale Log Files*\n"
         f"*Application:* {app_name}\n"
         f"*Requested:* `{fecha_str}`\n"
         f"*Most Recent Log:* `{most_recent_date}` (*{days_old} days old*)\n"
         f"⚠️ _{mensaje_texto}_"
     )
-    try:
-        enviar_aviso_slack(slack_msg)
-        print(f"✓ Slack de alerta de logs desactualizados enviado para {app_name}")
-    except Exception as e:
-        print(f"⚠️ Error enviando Slack de logs desactualizados: {e}")
+    for channel in CHANNELS:
+        if isinstance(channel, EmailChannel):
+            continue
+        try:
+            sent = channel.send_alert(alert_msg)
+            if sent:
+                print(f"✓ {channel.name()} de logs desactualizados enviado para {app_name}")
+        except Exception as e:
+            print(f"⚠️ Error enviando {channel.name()} de logs desactualizados: {e}")
 
 
-def notificar_error_conexion(app_key: str, app_name: str, fecha_str: str, error_message: str, max_retries: int = 3) -> None:
+def notificar_error_conexion(
+    app_key: str,
+    app_name: str,
+    fecha_str: str,
+    error_message: str,
+    max_retries: int = 3,
+) -> None:
     """
-    Envía notificaciones críticas indicando que hubo errores de conexión recurrentes después de múltiples intentos.
-    
-    Args:
-        app_key: Clave de la aplicación
-        app_name: Nombre de la aplicación
-        fecha_str: Fecha solicitada (YYYY-MM-DD)
-        error_message: Mensaje de error detallado
-        max_retries: Número de intentos realizados antes de fallar
+    Notifica errores de conexión recurrentes después de múltiples reintentos.
     """
-    from app.alerts import send_email, default_recipients
-    from slack_comunication import enviar_aviso_slack
-    from google_chat import enviar_aviso_gchat
-    
-    # Mensaje principal
+    from mailer.client import send_email, default_recipients
+
     mensaje_texto = (
         f"CRITICAL: Recurring connection errors prevented log analysis. "
         f"Failed after {max_retries} retry attempts. "
         f"This may hide critical application errors that need immediate attention."
     )
-    
-    # 1. Email con formato de alerta crítica
     subject = f"🚨 [{app_name}] Critical Connection Error After {max_retries} Retries"
-    
     html_body = f"""
     <div style="background-color: #fee; border-left: 4px solid #c00; padding: 15px; margin: 10px 0;">
         <h3 style="color: #c00; margin-top: 0;">🚨 CRITICAL: Recurring Connection Error</h3>
@@ -239,55 +195,47 @@ def notificar_error_conexion(app_key: str, app_name: str, fecha_str: str, error_
             <code style="color: #666; font-size: 0.9em;">{error_message}</code>
         </p>
         <p style="color: #666; font-size: 0.9em;">
-            ⚠️ <strong>WARNING:</strong> Connection failures may hide critical application errors 
-            (e.g., database connection issues, authentication failures, server crashes). 
+            ⚠️ <strong>WARNING:</strong> Connection failures may hide critical application errors.
             Investigate infrastructure and application health immediately.
         </p>
     </div>
     """
-    
-    # Determine sender name based on app_key
-    sender_name = "driverapp-alerts"  # Default
-    if app_key in ["klc", "accuratecargo", "klc_crossdock"]:
-        sender_name = "t4app-alerts"
-    elif app_key == "broker_goto":
-        sender_name = "brokerapp-alerts"
-    elif app_key == "t4tms_backend":
-        sender_name = "t4tms"
-    
     try:
         recipients = default_recipients()
-        send_email(subject, html_body, recipients, sender_name=sender_name)
+        send_email(subject, html_body, recipients, sender_name=_get_alert_sender(app_key))
         print(f"✓ Correo de error de conexión enviado para {app_name}")
     except Exception as e:
         print(f"⚠️ Error enviando correo de conexión: {e}")
-    
-    # 2. Google Chat - Formato con emojis y markdown
-    gchat_msg = (
-        f"🚨 **CRITICAL: Recurring Connection Error**\n"
-        f"**Application:** {app_name}\n"
-        f"**Date Requested:** `{fecha_str}`\n"
-        f"**Retry Attempts:** {max_retries}\n"
-        f"**Error:** `{error_message[:200]}{'...' if len(error_message) > 200 else ''}`\n"
-        f"⚠️ _{mensaje_texto}_"
-    )
-    try:
-        enviar_aviso_gchat(gchat_msg)
-        print(f"✓ Google Chat de error de conexión enviado para {app_name}")
-    except Exception as e:
-        print(f"⚠️ Error enviando Google Chat de conexión: {e}")
-    
-    # 3. Slack - Formato con emojis y markdown
-    slack_msg = (
+
+    error_short = f"{error_message[:200]}{'...' if len(error_message) > 200 else ''}"
+    alert_msg = (
         f"🚨 *CRITICAL: Recurring Connection Error*\n"
         f"*Application:* {app_name}\n"
         f"*Date Requested:* `{fecha_str}`\n"
         f"*Retry Attempts:* {max_retries}\n"
-        f"*Error:* `{error_message[:200]}{'...' if len(error_message) > 200 else ''}`\n"
+        f"*Error:* `{error_short}`\n"
         f"⚠️ _{mensaje_texto}_"
     )
-    try:
-        enviar_aviso_slack(slack_msg)
-        print(f"✓ Slack de error de conexión enviado para {app_name}")
-    except Exception as e:
-        print(f"⚠️ Error enviando Slack de conexión: {e}")
+    for channel in CHANNELS:
+        if isinstance(channel, EmailChannel):
+            continue
+        try:
+            sent = channel.send_alert(alert_msg)
+            if sent:
+                print(f"✓ {channel.name()} de error de conexión enviado para {app_name}")
+        except Exception as e:
+            print(f"⚠️ Error enviando {channel.name()} de conexión: {e}")
+
+
+# ------------------------------------------------------------------ helpers --
+
+def _get_alert_sender(app_key: str) -> str:
+    """Determina el nombre del remitente según la app."""
+    mapping = {
+        "klc": "t4app-alerts",
+        "accuratecargo": "t4app-alerts",
+        "klc_crossdock": "t4app-alerts",
+        "broker_goto": "brokerapp-alerts",
+        "t4tms_backend": "t4tms",
+    }
+    return mapping.get(app_key, "driverapp-alerts")

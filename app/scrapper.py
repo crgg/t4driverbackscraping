@@ -1,6 +1,5 @@
-# app/scraper.py
+# app/scrapper.py
 from datetime import date
-from pathlib import Path
 from typing import Any, Dict
 
 from app.config import get_app_credentials
@@ -8,9 +7,10 @@ from app.session_manager import create_logged_session
 from app.logs_scraper import fetch_logs_html, classify_logs
 from app.writer import save_logs
 from app.error_filter import dividir_nuevos_y_avisados
+from app.result import ScrapingResult
 
 
-def procesar_aplicacion(app_key: str, fecha_str: str, dia: date, max_retries: int = 3, timeout: int = None) -> Dict[str, Any]:
+def procesar_aplicacion(app_key: str, fecha_str: str, dia: date, max_retries: int = 3, timeout: int = None) -> ScrapingResult:
     """
     Hace el scraping, clasificación y guardado de logs
     para una aplicación, PERO NO ENVÍA CORREOS.
@@ -99,13 +99,13 @@ def procesar_aplicacion(app_key: str, fecha_str: str, dia: date, max_retries: in
         except Exception as e_hist:
             print(f"⚠️ Error al guardar historial: {e_hist}")
 
-    return {
-        "app_key": app_key,
-        "app_name": app_name,
-        "dia": dia,
-        "fecha_str": fecha_str,
-        "controlados_nuevos": controlados_nuevos,
-        "controlados_avisados": controlados_avisados,
-        "no_controlados_nuevos": no_controlados_nuevos,
-        "no_controlados_avisados": no_controlados_avisados,
-    }
+    return ScrapingResult(
+        app_key=app_key,
+        app_name=app_name,
+        dia=dia,
+        fecha_str=fecha_str,
+        controlados_nuevos=controlados_nuevos,
+        controlados_avisados=controlados_avisados,
+        no_controlados_nuevos=no_controlados_nuevos,
+        no_controlados_avisados=no_controlados_avisados,
+    )

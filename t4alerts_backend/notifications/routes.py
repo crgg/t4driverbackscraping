@@ -3,7 +3,7 @@ from flask_jwt_extended import jwt_required
 from t4alerts_backend.notifications.models import NotificationSettings
 from t4alerts_backend.common.database import db
 import logging
-from app.alerts import send_email
+from mailer.client import send_email
 
 notifications_bp = Blueprint('notifications', __name__)
 logger = logging.getLogger(__name__)
@@ -127,7 +127,7 @@ def send_manual_notice():
                             # Actually, if scraping fails completely, the report will be empty.
                             
                         # Generate HTML
-                        from app.email_notifier import construir_html_resumen, _get_subject
+                        from mailer.builder import construir_html_resumen, _get_subject
                         try:
                             forced_data = None
                             if resultado:
@@ -153,7 +153,7 @@ def send_manual_notice():
                     # Determine sender name
                     sender_name = None
                     if use_template:
-                         from app.email_notifier import _get_sender_name
+                         from mailer.builder import _get_sender_name
                          if subject: 
                              sender_name = _get_sender_name(app_key, subject)
             

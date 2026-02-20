@@ -6,7 +6,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from datetime import date
-from app.email_notifier import construir_html_resumen
+from mailer.builder import construir_html_resumen
 from google_chat.notifier import _format_error_message_email_style, _get_log_paths
 from app.log_stats import get_daily_errors
 
