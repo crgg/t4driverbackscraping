@@ -2,7 +2,10 @@ requests
 beautifulsoup4
 python-dotenv
 psycopg2-binary
-apscheduler
+# apscheduler — reemplazado por Celery (ver scheduler_celery/)
+celery[redis]>=5.3
+redis>=5.0
+flower>=2.0.0
 twilio>=8.0.0
 slack-sdk>=3.0.0
 pyopenssl

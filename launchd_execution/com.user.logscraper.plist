@@ -6,11 +6,19 @@
 	<key>Label</key>
 	<string>com.user.logscraper</string>
 
-	<!-- Comando a ejecutar: Python + ruta absoluta al script -->
+	<!-- MIGRADO: ya NO usa APScheduler ni scheduler/scheduler_main.py.
+	     Ahora levanta el stack Celery + Redis via Docker Compose.
+	     NOTA: Docker Desktop debe estar corriendo para que este comando funcione.
+	     Si prefieres control manual, desactiva este plist y usa:
+	       cd .../scrapping_project/scheduler_celery && docker compose up -d --build -->
 	<key>ProgramArguments</key>
 	<array>
-		<string>/Users/administrator/Desktop/scrapping_project/venv/bin/python3</string>
-		<string>/Users/administrator/Desktop/scrapping_project/scheduler/scheduler_main.py</string>
+		<string>/usr/local/bin/docker</string>
+		<string>compose</string>
+		<string>-f</string>
+		<string>/Users/administrator/Desktop/scrapping_project/scheduler_celery/docker-compose.yml</string>
+		<string>up</string>
+		<string>--build</string>
 	</array>
 
 	<!-- Directorio de trabajo (importante para rutas relativas) -->
@@ -24,9 +32,11 @@
 		<string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
 	</dict>
 
-	<!-- Iniciar automáticamente al cargar el sistema -->
+	<!-- RunAtLoad desactivado: Docker Desktop puede no estar listo al boot.
+	     Para arranque automático, usa un Login Item de Docker Desktop
+	     y luego actívalo de nuevo poniendo <true/> -->
 	<key>RunAtLoad</key>
-	<true/>
+	<false/>
 
 	<!-- Mantener el proceso siempre activo (reiniciar si falla) -->
 	<key>KeepAlive</key>
